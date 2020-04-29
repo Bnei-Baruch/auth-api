@@ -77,7 +77,7 @@ func AuthenticationMiddleware(tokenVerifier *oidc.IDTokenVerifier, disabled bool
 			}
 
 			var claims *IDTokenClaims
-			if err := token.Claims(claims); err != nil {
+			if err := token.Claims(&claims); err != nil {
 				httputil.NewBadRequestError(err, "malformed JWT claims").Abort(w, r)
 				return
 			}
