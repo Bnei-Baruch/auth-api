@@ -6,19 +6,19 @@ import (
 
 	"github.com/Nerzal/gocloak/v5"
 	"github.com/coreos/go-oidc"
-	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+	"github.com/rs/cors"
 	"github.com/rs/zerolog/log"
 
 	"github.com/Bnei-Baruch/auth-api/pkg/middleware"
 )
 
 type App struct {
-	Router         *mux.Router
-	Handler        http.Handler
-	tokenVerifier  *oidc.IDTokenVerifier
-	client 		   gocloak.GoCloak
-	token		   *gocloak.JWT
+	Router        *mux.Router
+	Handler       http.Handler
+	tokenVerifier *oidc.IDTokenVerifier
+	client        gocloak.GoCloak
+	token         *gocloak.JWT
 }
 
 func (a *App) Initialize(authUrl string, accountsUrl string, skipAuth bool, clientID string, cleintSecret string) {
@@ -37,17 +37,27 @@ func (a *App) InitializeWithDB(accountsUrl string, skipAuth bool) {
 		a.initOidc(accountsUrl)
 	}
 
-	headersOk := handlers.AllowedHeaders([]string{"X-Requested-With", "Content-Type", "Content-Length", "Accept-Encoding", "Content-Range", "Content-Disposition", "Authorization"})
-	originsOk := handlers.AllowedOrigins([]string{"*"})
-	methodsOk := handlers.AllowedMethods([]string{"GET", "DELETE", "POST", "PUT", "OPTIONS"})
-	cors := handlers.CORS(originsOk, headersOk, methodsOk)
+	corsMiddleware := cors.New(cors.Options{
+		AllowedOrigins:   []string{"*"},
+		AllowCredentials: true,
+		AllowedMethods: []string{
+			http.MethodHead,
+			http.MethodGet,
+			http.MethodPost,
+			http.MethodPut,
+			http.MethodPatch,
+			http.MethodDelete,
+		},
+		AllowedHeaders: []string{"Origin", "Accept", "Content-Type", "X-Requested-With", "Authorization"},
+	})
 
 	a.Handler = middleware.ContextMiddleware(
 		middleware.LoggingMiddleware(
 			middleware.RecoveryMiddleware(
 				middleware.RealIPMiddleware(
-					middleware.AuthenticationMiddleware(a.tokenVerifier, skipAuth)(
-						cors(a.Router))))))
+					corsMiddleware.Handler(
+						middleware.AuthenticationMiddleware(a.tokenVerifier, skipAuth)(
+							a.Router))))))
 }
 
 func (a *App) initOidc(issuer string) {
