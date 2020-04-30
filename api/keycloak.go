@@ -1,7 +1,9 @@
 package api
 
 import (
+	"errors"
 	"github.com/Bnei-Baruch/auth-api/pkg/httputil"
+	"github.com/Bnei-Baruch/auth-api/pkg/middleware"
 	"github.com/Nerzal/gocloak/v5"
 	"github.com/gorilla/mux"
 	pkgerr "github.com/pkg/errors"
@@ -63,10 +65,23 @@ func (a *App) getUserByEmail(email string) (*gocloak.User, error) {
 	return nil, nil
 }
 
+func checkRole(role string, r *http.Request) bool {
+	if rCtx, ok := middleware.ContextFromRequest(r); ok {
+		if rCtx.IDClaims != nil {
+			for _, r := range rCtx.IDClaims.RealmAccess.Roles {
+				if r == role {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
 func (a *App) checkUser(w http.ResponseWriter, r *http.Request) {
 	email := r.FormValue("email")
 
-	user,err := a.getUserByEmail(email)
+	user, err := a.getUserByEmail(email)
 	if err != nil {
 		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 		return
@@ -81,10 +96,18 @@ func (a *App) checkUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) verifyUser(w http.ResponseWriter, r *http.Request) {
-	email := r.FormValue("email")
+
+	// Check role
+	chk := checkRole("gxy_user", r)
+	if !chk {
+		e := errors.New("bad permission")
+		httputil.NewUnauthorizedError(e).Abort(w, r)
+		return
+	}
 
 	// Get User by Mail
-	user,err := a.getUserByEmail(email)
+	email := r.FormValue("email")
+	user, err := a.getUserByEmail(email)
 	if err != nil {
 		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 		return
@@ -97,7 +120,7 @@ func (a *App) verifyUser(w http.ResponseWriter, r *http.Request) {
 
 	// Get User Groups
 	var groups []*gocloak.UserGroup
-	groups,err = a.client.GetUserGroups(a.token.AccessToken, "main", *user.ID)
+	groups, err = a.client.GetUserGroups(a.token.AccessToken, "main", *user.ID)
 	if err != nil {
 		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 		return
@@ -127,9 +150,9 @@ func (a *App) verifyUser(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	} else {
-		httputil.RespondWithError(w,http.StatusNotFound,"No group found")
+		httputil.RespondWithError(w, http.StatusNotFound, "No group found")
 		return
 	}
 
-	httputil.RespondWithError(w,http.StatusNotFound,"Not in pending group")
+	httputil.RespondWithError(w, http.StatusNotFound, "Not in pending group")
 }
