@@ -92,7 +92,29 @@ func (a *App) checkUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputil.RespondWithJSON(w, http.StatusOK, user)
+	// Get User Groups
+	var groups []*gocloak.UserGroup
+	groups, err = a.client.GetUserGroups(a.token.AccessToken, "main", *user.ID)
+	if err != nil {
+		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+		return
+	}
+
+	if len(groups) > 0 {
+		for _, g := range groups {
+
+			// Make sure user in galaxy group
+			if *g.ID == "04778f5d-31c1-4a2d-a395-7eac07ebc5b7" {
+				httputil.RespondWithJSON(w, http.StatusOK, user)
+				return
+			}
+		}
+	} else {
+		httputil.RespondWithJSON(w, http.StatusNotFound, map[string]string{})
+		return
+	}
+
+	httputil.RespondWithJSON(w, http.StatusNotFound, map[string]string{})
 }
 
 func (a *App) verifyUser(w http.ResponseWriter, r *http.Request) {
