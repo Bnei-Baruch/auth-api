@@ -132,8 +132,8 @@ func (a *App) checkUser(w http.ResponseWriter, r *http.Request) {
 		curTime := int(time.Now().UnixNano() / int64(time.Millisecond))
 
 		// Need to wait 1 hour
-		if (reqTime - curTime) < 3600000 {
-			httputil.RespondWithError(w, http.StatusTooEarly, "Rquest Too Early")
+		if (curTime - reqTime) < 3600000 {
+			httputil.RespondWithError(w, http.StatusTooEarly, "Request Too Early")
 			return
 		}
 	}
