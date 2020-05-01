@@ -117,6 +117,20 @@ func (a *App) setRequest(w http.ResponseWriter, r *http.Request) {
 	httputil.RespondSuccess(w)
 }
 
+func (a *App) setVerify(email string, user *gocloak.User) bool {
+
+	// Set verify attribute
+	timestamp := int(time.Now().UnixNano() / int64(time.Millisecond))
+	user.Attributes["verify"] = []string{email}
+	user.Attributes["ver_time"] = []string{strconv.Itoa(timestamp)}
+	err := a.client.UpdateUser(a.token.AccessToken, "main", *user)
+	if err != nil {
+		return false
+	}
+
+	return true
+}
+
 func (a *App) checkUser(w http.ResponseWriter, r *http.Request) {
 
 	// Get Current User
@@ -225,6 +239,8 @@ func (a *App) verifyUser(w http.ResponseWriter, r *http.Request) {
 					httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 					return
 				}
+
+				// TODO: get current user and set verify attribute
 
 				httputil.RespondSuccess(w)
 				return
