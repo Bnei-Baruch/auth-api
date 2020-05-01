@@ -117,18 +117,23 @@ func (a *App) setRequest(w http.ResponseWriter, r *http.Request) {
 	httputil.RespondSuccess(w)
 }
 
-func (a *App) setVerify(email string, user *gocloak.User) bool {
+func (a *App) setVerify(email string, r *http.Request) error {
+	// Get Current User
+	cu, err := a.getCurrentUser(r)
+	if err != nil {
+		return err
+	}
 
 	// Set verify attribute
 	timestamp := int(time.Now().UnixNano() / int64(time.Millisecond))
-	user.Attributes["verify"] = []string{email}
-	user.Attributes["ver_time"] = []string{strconv.Itoa(timestamp)}
-	err := a.client.UpdateUser(a.token.AccessToken, "main", *user)
+	cu.Attributes["verify"] = []string{email}
+	cu.Attributes["ver_time"] = []string{strconv.Itoa(timestamp)}
+	err = a.client.UpdateUser(a.token.AccessToken, "main", *cu)
 	if err != nil {
-		return false
+		return err
 	}
 
-	return true
+	return nil
 }
 
 func (a *App) checkUser(w http.ResponseWriter, r *http.Request) {
@@ -240,7 +245,13 @@ func (a *App) verifyUser(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 
-				// TODO: get current user and set verify attribute
+				// Set verify attribute
+				err := a.setVerify(email, r)
+				if err != nil {
+					//FIXME: does we need rollback group change?
+					httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+					return
+				}
 
 				httputil.RespondSuccess(w)
 				return
@@ -252,4 +263,32 @@ func (a *App) verifyUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httputil.RespondWithError(w, http.StatusNotFound, "Not in pending group")
+}
+
+func (a *App) approveUser(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	// Check role
+	chk := checkRole("gxy_root", r)
+	if !chk {
+		e := errors.New("bad permission")
+		httputil.NewUnauthorizedError(e).Abort(w, r)
+		return
+	}
+
+	// Change User group
+	err := a.client.DeleteUserFromGroup(a.token.AccessToken, "main", id, "c46f3890-fa01-4933-968d-488ba5ca3153")
+	if err != nil {
+		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+		return
+	}
+
+	err = a.client.AddUserToGroup(a.token.AccessToken, "main", id, "04778f5d-31c1-4a2d-a395-7eac07ebc5b7")
+	if err != nil {
+		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+		return
+	}
+
+	httputil.RespondSuccess(w)
 }
