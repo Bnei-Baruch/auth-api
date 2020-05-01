@@ -8,6 +8,8 @@ import (
 	"github.com/gorilla/mux"
 	pkgerr "github.com/pkg/errors"
 	"net/http"
+	"strconv"
+	"time"
 )
 
 func (a *App) getGroups(w http.ResponseWriter, r *http.Request) {
@@ -103,7 +105,9 @@ func (a *App) setRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Set request attribute
+	timestamp := int(time.Now().UnixNano() / int64(time.Millisecond))
 	cu.Attributes["request"] = []string{email}
+	cu.Attributes["req_time"] = []string{strconv.Itoa(timestamp)}
 	err = a.client.UpdateUser(a.token.AccessToken, "main", *cu)
 	if err != nil {
 		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
@@ -114,6 +118,26 @@ func (a *App) setRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) checkUser(w http.ResponseWriter, r *http.Request) {
+
+	// Get Current User
+	cu, err := a.getCurrentUser(r)
+	if err != nil {
+		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+		return
+	}
+
+	// Check if request already done
+	if val, ok := cu.Attributes["req_time"]; ok {
+		reqTime, _ := strconv.Atoi(val[0])
+		curTime := int(time.Now().UnixNano() / int64(time.Millisecond))
+
+		// Need to wait 1 hour
+		if (reqTime - curTime) < 3600000 {
+			httputil.RespondWithError(w, http.StatusTooEarly, "Rquest Too Early")
+			return
+		}
+	}
+
 	email := r.FormValue("email")
 
 	user, err := a.getUserByEmail(email)
