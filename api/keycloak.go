@@ -78,6 +78,41 @@ func checkRole(role string, r *http.Request) bool {
 	return false
 }
 
+func (a *App) getCurrentUser(r *http.Request) (*gocloak.User, error) {
+	if rCtx, ok := middleware.ContextFromRequest(r); ok {
+		if rCtx.IDClaims != nil {
+			var user *gocloak.User
+			user, err := a.client.GetUserByID(a.token.AccessToken, "main", rCtx.IDClaims.Sub)
+			if err != nil {
+				return nil, err
+			}
+			return user, nil
+		}
+	}
+	return nil, nil
+}
+
+func (a *App) setRequest(w http.ResponseWriter, r *http.Request) {
+	email := r.FormValue("email")
+
+	// Get Current User
+	cu, err := a.getCurrentUser(r)
+	if err != nil {
+		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+		return
+	}
+
+	// Set request attribute
+	cu.Attributes["request"] = []string{email}
+	err = a.client.UpdateUser(a.token.AccessToken, "main", *cu)
+	if err != nil {
+		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+		return
+	}
+
+	httputil.RespondSuccess(w)
+}
+
 func (a *App) checkUser(w http.ResponseWriter, r *http.Request) {
 	email := r.FormValue("email")
 

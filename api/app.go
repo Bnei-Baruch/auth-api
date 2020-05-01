@@ -100,4 +100,5 @@ func (a *App) initializeRoutes() {
 	a.Router.HandleFunc("/users/{id}", a.getGroupUsers).Methods("GET")
 	a.Router.HandleFunc("/check", a.checkUser).Methods("GET")
 	a.Router.HandleFunc("/verify", a.verifyUser).Methods("GET")
+	a.Router.HandleFunc("/request", a.setRequest).Methods("GET")
 }
