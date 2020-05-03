@@ -148,6 +148,10 @@ func (a *App) setRequest(w http.ResponseWriter, r *http.Request) {
 
 	// Set request attributes to current user
 	timestamp := int(time.Now().UnixNano() / int64(time.Millisecond))
+	if cu.Attributes == nil {
+		cu.Attributes = map[string][]string{}
+		cu.Attributes["locale"] = []string{"en"}
+	}
 	cu.Attributes["request"] = []string{email}
 	cu.Attributes["timestamp"] = []string{strconv.Itoa(timestamp)}
 	err = a.client.UpdateUser(a.token.AccessToken, "main", *cu)
@@ -157,6 +161,10 @@ func (a *App) setRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Set request attributes to requested user
+	if ru.Attributes == nil {
+		ru.Attributes = map[string][]string{}
+		cu.Attributes["locale"] = []string{"en"}
+	}
 	if val, ok := ru.Attributes["pending"]; ok {
 		val = append(val, *cu.Email)
 		ru.Attributes["pending"] = val
@@ -259,6 +267,10 @@ func (a *App) setVerify(action string, email string, pu *gocloak.User, r *http.R
 
 	// Set approved to current user attribute
 	if action == "approve" {
+		if cu.Attributes == nil {
+			cu.Attributes = map[string][]string{}
+			cu.Attributes["locale"] = []string{"en"}
+		}
 		if val, ok := cu.Attributes["approved"]; ok {
 			val = append(val, *cu.Email)
 			cu.Attributes["approved"] = val
@@ -268,6 +280,10 @@ func (a *App) setVerify(action string, email string, pu *gocloak.User, r *http.R
 	}
 
 	// Remove pending attribute from current user
+	if cu.Attributes == nil {
+		cu.Attributes = map[string][]string{}
+		cu.Attributes["locale"] = []string{"en"}
+	}
 	if val, ok := cu.Attributes["pending"]; ok {
 		if len(val) > 1 {
 			for i, v := range val {
