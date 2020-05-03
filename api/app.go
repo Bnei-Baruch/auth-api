@@ -98,8 +98,7 @@ func (a *App) initializeRoutes() {
 	a.Router.HandleFunc("/groups", a.getGroups).Methods("GET")
 	a.Router.HandleFunc("/users", a.getUsers).Methods("GET")
 	a.Router.HandleFunc("/users/{id}", a.getGroupUsers).Methods("GET")
-	a.Router.HandleFunc("/check", a.checkUser).Methods("GET")
+	a.Router.HandleFunc("/request", a.setRequest).Methods("GET")
 	a.Router.HandleFunc("/verify", a.verifyUser).Methods("GET")
 	a.Router.HandleFunc("/approve/{id}", a.approveUser).Methods("GET")
-	a.Router.HandleFunc("/request", a.setRequest).Methods("GET")
 }
