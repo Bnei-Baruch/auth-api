@@ -42,7 +42,7 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 		if rCtx, ok := ContextFromRequest(r); ok {
 			event.Str("ip", rCtx.IP)
 			if rCtx.IDClaims != nil {
-				event.Str("user", rCtx.IDClaims.Aud)
+				event.Str("user", rCtx.IDClaims.Email)
 			}
 		}
 
