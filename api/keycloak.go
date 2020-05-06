@@ -307,6 +307,21 @@ func (a *App) setVerify(action string, email string, pu *gocloak.User, r *http.R
 		delete(pu.Attributes, "request")
 		delete(pu.Attributes, "timestamp")
 	}
+
+	if action == "ignore" {
+		// Add User to banned group
+		err := a.client.DeleteUserFromGroup(a.token.AccessToken, "main", *pu.ID, "c46f3890-fa01-4933-968d-488ba5ca3153")
+		if err != nil {
+			return err
+		}
+
+		err = a.client.AddUserToGroup(a.token.AccessToken, "main", *pu.ID, "c4569eaa-c67d-446e-b370-ad426a006c6b")
+		if err != nil {
+			return err
+		}
+		*pu.Enabled = false
+	}
+
 	err = a.client.UpdateUser(a.token.AccessToken, "main", *pu)
 	if err != nil {
 		return err
