@@ -34,6 +34,17 @@ func (a *App) getUsers(w http.ResponseWriter, r *http.Request) {
 	httputil.RespondWithJSON(w, http.StatusOK, u)
 }
 
+func (a *App) getMyInfo(w http.ResponseWriter, r *http.Request) {
+
+	u, err := a.getCurrentUser(r)
+	if err != nil {
+		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+		return
+	}
+
+	httputil.RespondWithJSON(w, http.StatusOK, u)
+}
+
 func (a *App) getGroupUsers(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
