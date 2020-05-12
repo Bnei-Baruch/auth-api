@@ -368,3 +368,24 @@ func (a *App) approveUser(w http.ResponseWriter, r *http.Request) {
 
 	httputil.RespondSuccess(w)
 }
+
+func (a *App) removeUser(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	// Check role
+	chk := checkRole("gxy_root", r)
+	if !chk {
+		e := errors.New("bad permission")
+		httputil.NewUnauthorizedError(e).Abort(w, r)
+		return
+	}
+
+	err := a.client.DeleteUser(a.token.AccessToken, "main", id)
+	if err != nil {
+		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+		return
+	}
+
+	httputil.RespondSuccess(w)
+}
