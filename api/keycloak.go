@@ -22,8 +22,9 @@ func (a *App) getGroups(w http.ResponseWriter, r *http.Request) {
 	httputil.RespondWithJSON(w, http.StatusOK, g)
 }
 
-func (a *App) getUsers(w http.ResponseWriter, r *http.Request) {
-	max := 10000
+func (a *App) getVerifyUsers(w http.ResponseWriter, r *http.Request) {
+
+	max := 100000
 	params := gocloak.GetUsersParams{Max: &max}
 	u, err := a.client.GetUsers(a.token.AccessToken, "main", params)
 	if err != nil {
@@ -31,7 +32,14 @@ func (a *App) getUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputil.RespondWithJSON(w, http.StatusOK, u)
+	var ar []*gocloak.User
+	for _, v := range u {
+		if _, ok := v.Attributes["approved"]; ok {
+			ar = append(ar, v)
+		}
+	}
+
+	httputil.RespondWithJSON(w, http.StatusOK, ar)
 }
 
 func (a *App) getMyInfo(w http.ResponseWriter, r *http.Request) {

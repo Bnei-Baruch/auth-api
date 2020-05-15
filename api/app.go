@@ -96,7 +96,7 @@ func (a *App) Run(listenAddr string) {
 
 func (a *App) initializeRoutes() {
 	a.Router.HandleFunc("/groups", a.getGroups).Methods("GET")
-	a.Router.HandleFunc("/users", a.getUsers).Methods("GET")
+	a.Router.HandleFunc("/vusers", a.getVerifyUsers).Methods("GET")
 	a.Router.HandleFunc("/my_info", a.getMyInfo).Methods("GET")
 	a.Router.HandleFunc("/users/{id}", a.getGroupUsers).Methods("GET")
 	a.Router.HandleFunc("/request", a.setRequest).Methods("GET")
