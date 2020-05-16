@@ -159,7 +159,7 @@ func (a *App) setRequest(w http.ResponseWriter, r *http.Request) {
 
 	// Get requested user
 	email := r.FormValue("email")
-	ru, err := a.getUserByEmail(email)
+	ru, err := a.getRequestedUser(email)
 	if err != nil {
 		httputil.RespondWithJSON(w, http.StatusNotFound, err)
 		return
