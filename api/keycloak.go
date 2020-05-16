@@ -291,7 +291,7 @@ func (a *App) setVerify(action string, email string, pu *gocloak.User, r *http.R
 			cu.Attributes["locale"] = []string{"en"}
 		}
 		if val, ok := cu.Attributes["approved"]; ok {
-			val = append(val, *cu.Email)
+			val = append(val, email)
 			cu.Attributes["approved"] = val
 		} else {
 			cu.Attributes["approved"] = []string{email}
