@@ -295,6 +295,12 @@ func (a *App) setVerify(action string, email string, pu *gocloak.User, r *http.R
 			cu.Attributes["approved"] = val
 		} else {
 			cu.Attributes["approved"] = []string{email}
+
+			// Add to verify group
+			err = a.client.AddUserToGroup(a.token.AccessToken, "main", *cu.ID, "96a32920-5f34-4678-b8e3-ea26f4143558")
+			if err != nil {
+				return err
+			}
 		}
 
 		// Remove request attribute from pending user
