@@ -296,6 +296,12 @@ func (a *App) setVerify(action string, email string, pu *gocloak.User, r *http.R
 		} else {
 			cu.Attributes["approved"] = []string{email}
 		}
+
+		// Remove request attribute from pending user
+		if _, ok := pu.Attributes["request"]; ok {
+			delete(pu.Attributes, "request")
+			delete(pu.Attributes, "timestamp")
+		}
 	}
 
 	// Remove pending attribute from current user
@@ -319,12 +325,6 @@ func (a *App) setVerify(action string, email string, pu *gocloak.User, r *http.R
 	err = a.client.UpdateUser(a.token.AccessToken, "main", *cu)
 	if err != nil {
 		return err
-	}
-
-	// Remove request attribute from pending user
-	if _, ok := pu.Attributes["request"]; ok {
-		delete(pu.Attributes, "request")
-		delete(pu.Attributes, "timestamp")
 	}
 
 	if action == "ignore" {
