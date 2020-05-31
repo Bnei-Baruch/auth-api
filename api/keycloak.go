@@ -67,6 +67,26 @@ func (a *App) getGroupUsers(w http.ResponseWriter, r *http.Request) {
 	httputil.RespondWithJSON(w, http.StatusOK, g)
 }
 
+func (a *App) getUserByID(w http.ResponseWriter, r *http.Request) {
+	// Check role
+	chk := checkRole("gxy_root", r)
+	if !chk {
+		e := errors.New("bad permission")
+		httputil.NewUnauthorizedError(e).Abort(w, r)
+		return
+	}
+
+	vars := mux.Vars(r)
+	id := vars["id"]
+	var user *gocloak.User
+	user, err := a.client.GetUserByID(a.token.AccessToken, "main", id)
+	if err != nil {
+		httputil.RespondWithJSON(w, http.StatusNotFound, err)
+	}
+
+	httputil.RespondWithJSON(w, http.StatusOK, user)
+}
+
 func (a *App) getUserByEmail(email string) (*gocloak.User, error) {
 	params := gocloak.GetUsersParams{Email: &email}
 	var users []*gocloak.User
