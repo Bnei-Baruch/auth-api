@@ -104,4 +104,5 @@ func (a *App) initializeRoutes() {
 	a.Router.HandleFunc("/verify", a.verifyUser).Methods("GET")
 	a.Router.HandleFunc("/approve/{id}", a.approveUser).Methods("GET")
 	a.Router.HandleFunc("/remove/{id}", a.removeUser).Methods("GET")
+	a.Router.HandleFunc("/cleanup", a.cleanUsers).Methods("GET")
 }

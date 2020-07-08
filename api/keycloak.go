@@ -431,3 +431,37 @@ func (a *App) removeUser(w http.ResponseWriter, r *http.Request) {
 
 	httputil.RespondSuccess(w)
 }
+
+func (a *App) cleanUsers(w http.ResponseWriter, r *http.Request) {
+	// Check role
+	chk := checkRole("gxy_root", r)
+	if !chk {
+		e := errors.New("bad permission")
+		httputil.NewUnauthorizedError(e).Abort(w, r)
+		return
+	}
+
+	max := 10000
+	params := gocloak.GetGroupsParams{Max: &max}
+	users, err := a.client.GetGroupMembers(a.token.AccessToken, "main", "c46f3890-fa01-4933-968d-488ba5ca3153", params)
+	if err != nil {
+		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+		return
+	}
+
+	if len(users) > 0 {
+		timenow := time.Now().UnixNano() / int64(time.Millisecond)
+		for _, u := range users {
+			// Remove users with not verified mail within 7 days
+			if *u.EmailVerified == false && (timenow-*u.CreatedTimestamp) > 7*24*3600*1000 {
+				err := a.client.DeleteUser(a.token.AccessToken, "main", *u.ID)
+				if err != nil {
+					httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+					return
+				}
+			}
+		}
+	}
+
+	httputil.RespondSuccess(w)
+}
