@@ -451,7 +451,24 @@ func (a *App) cleanUsers(w http.ResponseWriter, r *http.Request) {
 
 	if len(users) > 0 {
 		timenow := time.Now().UnixNano() / int64(time.Millisecond)
+		curtime := int(time.Now().UnixNano() / int64(time.Millisecond))
 		for _, u := range users {
+			// Remove request attribute within 14 days
+			if _, ok := u.Attributes["request"]; ok {
+				if val, ok := u.Attributes["timestamp"]; ok {
+					reqtime, _ := strconv.Atoi(val[0])
+					if (curtime - reqtime) > 14*24*3600*1000 {
+						delete(u.Attributes, "request")
+						delete(u.Attributes, "timestamp")
+						err = a.client.UpdateUser(a.token.AccessToken, "main", *u)
+						if err != nil {
+							httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+							return
+						}
+					}
+				}
+			}
+
 			// Remove users with not verified mail within 7 days
 			if *u.EmailVerified == false && (timenow-*u.CreatedTimestamp) > 7*24*3600*1000 {
 				err := a.client.DeleteUser(a.token.AccessToken, "main", *u.ID)
