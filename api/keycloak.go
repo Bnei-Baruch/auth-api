@@ -185,6 +185,25 @@ func (a *App) setRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Set request attributes to requested user
+	if ru.Attributes == nil {
+		ru.Attributes = map[string][]string{}
+		ru.Attributes["locale"] = []string{"en"}
+	}
+	if _, ok := ru.Attributes["pending"]; ok {
+		//val = append(val, *cu.Email)
+		//ru.Attributes["pending"] = val
+		httputil.RespondWithError(w, http.StatusBadRequest, "Pending Already Done")
+		return
+	} else {
+		ru.Attributes["pending"] = []string{*cu.Email}
+	}
+	err = a.client.UpdateUser(a.token.AccessToken, "main", *ru)
+	if err != nil {
+		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+		return
+	}
+
 	// Set request attributes to current user
 	timestamp := int(time.Now().UnixNano() / int64(time.Millisecond))
 	if cu.Attributes == nil {
@@ -194,23 +213,6 @@ func (a *App) setRequest(w http.ResponseWriter, r *http.Request) {
 	cu.Attributes["request"] = []string{email}
 	cu.Attributes["timestamp"] = []string{strconv.Itoa(timestamp)}
 	err = a.client.UpdateUser(a.token.AccessToken, "main", *cu)
-	if err != nil {
-		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
-		return
-	}
-
-	// Set request attributes to requested user
-	if ru.Attributes == nil {
-		ru.Attributes = map[string][]string{}
-		cu.Attributes["locale"] = []string{"en"}
-	}
-	if val, ok := ru.Attributes["pending"]; ok {
-		val = append(val, *cu.Email)
-		ru.Attributes["pending"] = val
-	} else {
-		ru.Attributes["pending"] = []string{*cu.Email}
-	}
-	err = a.client.UpdateUser(a.token.AccessToken, "main", *ru)
 	if err != nil {
 		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 		return
