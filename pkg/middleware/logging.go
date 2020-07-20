@@ -34,7 +34,7 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 	h2 := hlog.AccessHandler(func(r *http.Request, status, size int, duration time.Duration) {
 		event := hlog.FromRequest(r).Info().
 			Str("method", r.Method).
-			Str("path", r.URL.EscapedPath()).
+			Str("path", r.URL.String()).
 			Int("status", status).
 			Int("size", size).
 			Dur("duration", duration)
