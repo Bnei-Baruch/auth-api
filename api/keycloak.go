@@ -224,8 +224,8 @@ func (a *App) setRequest(w http.ResponseWriter, r *http.Request) {
 func (a *App) verifyUser(w http.ResponseWriter, r *http.Request) {
 
 	// Check role
-	authAdmin := checkRole("auth_admin", r)
-	if !authAdmin {
+	gxyUser := checkRole("gxy_user", r)
+	if !gxyUser {
 		e := errors.New("bad permission")
 		httputil.NewUnauthorizedError(e).Abort(w, r)
 		return
