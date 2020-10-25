@@ -395,11 +395,19 @@ func (a *App) approveUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Change User group
-	err := a.client.DeleteUserFromGroup(a.token.AccessToken, "main", id, "c46f3890-fa01-4933-968d-488ba5ca3153")
+	// Get User groups
+	groups, err := a.client.GetUserGroups(a.token.AccessToken, "main", id)
 	if err != nil {
 		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 		return
+	}
+
+	for _, v := range groups {
+		err := a.client.DeleteUserFromGroup(a.token.AccessToken, "main", id, *v.ID)
+		if err != nil {
+			httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+			return
+		}
 	}
 
 	err = a.client.AddUserToGroup(a.token.AccessToken, "main", id, "04778f5d-31c1-4a2d-a395-7eac07ebc5b7")
