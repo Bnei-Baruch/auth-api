@@ -69,8 +69,8 @@ func (a *App) getGroupUsers(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) getUserByID(w http.ResponseWriter, r *http.Request) {
 	// Check role
-	chk := checkRole("gxy_root", r)
-	if !chk {
+	authAdmin := checkRole("auth_admin", r)
+	if !authAdmin {
 		e := errors.New("bad permission")
 		httputil.NewUnauthorizedError(e).Abort(w, r)
 		return
@@ -224,8 +224,8 @@ func (a *App) setRequest(w http.ResponseWriter, r *http.Request) {
 func (a *App) verifyUser(w http.ResponseWriter, r *http.Request) {
 
 	// Check role
-	chk := checkRole("gxy_user", r)
-	if !chk {
+	gxyUser := checkRole("gxy_user", r)
+	if !gxyUser {
 		e := errors.New("bad permission")
 		httputil.NewUnauthorizedError(e).Abort(w, r)
 		return
@@ -388,8 +388,8 @@ func (a *App) approveUser(w http.ResponseWriter, r *http.Request) {
 	id := vars["id"]
 
 	// Check role
-	chk := checkRole("gxy_root", r)
-	if !chk {
+	authAdmin := checkRole("auth_admin", r)
+	if !authAdmin {
 		e := errors.New("bad permission")
 		httputil.NewUnauthorizedError(e).Abort(w, r)
 		return
@@ -424,8 +424,8 @@ func (a *App) removeUser(w http.ResponseWriter, r *http.Request) {
 	id := vars["id"]
 
 	// Check role
-	chk := checkRole("gxy_root", r)
-	if !chk {
+	authRoot := checkRole("auth_root", r)
+	if !authRoot {
 		e := errors.New("bad permission")
 		httputil.NewUnauthorizedError(e).Abort(w, r)
 		return
@@ -442,8 +442,8 @@ func (a *App) removeUser(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) cleanUsers(w http.ResponseWriter, r *http.Request) {
 	// Check role
-	chk := checkRole("gxy_root", r)
-	if !chk {
+	authRoot := checkRole("auth_root", r)
+	if !authRoot {
 		e := errors.New("bad permission")
 		httputil.NewUnauthorizedError(e).Abort(w, r)
 		return
