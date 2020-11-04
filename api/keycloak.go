@@ -22,6 +22,18 @@ func (a *App) getGroups(w http.ResponseWriter, r *http.Request) {
 	httputil.RespondWithJSON(w, http.StatusOK, g)
 }
 
+func (a *App) getUsers(w http.ResponseWriter, r *http.Request) {
+	value := false
+	params := gocloak.GetUsersParams{BriefRepresentation: &value}
+	g, err := a.client.GetUsers(a.token.AccessToken, "main", params)
+	if err != nil {
+		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+		return
+	}
+
+	httputil.RespondWithJSON(w, http.StatusOK, g)
+}
+
 func (a *App) getVerifyUsers(w http.ResponseWriter, r *http.Request) {
 
 	max := 100000
@@ -221,6 +233,31 @@ func (a *App) setRequest(w http.ResponseWriter, r *http.Request) {
 	httputil.RespondSuccess(w)
 }
 
+func (a *App) setPending(w http.ResponseWriter, r *http.Request) {
+
+	// Get Current User
+	cu, err := a.getCurrentUser(r)
+	if err != nil {
+		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+		return
+	}
+
+	// Move from new users to pending
+	err = a.client.DeleteUserFromGroup(a.token.AccessToken, "main", *cu.ID, "85092f0c-19f7-4963-8a27-adf2fae47dc0")
+	if err != nil {
+		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+		return
+	}
+
+	err = a.client.AddUserToGroup(a.token.AccessToken, "main", *cu.ID, "c46f3890-fa01-4933-968d-488ba5ca3153")
+	if err != nil {
+		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+		return
+	}
+
+	httputil.RespondSuccess(w)
+}
+
 func (a *App) verifyUser(w http.ResponseWriter, r *http.Request) {
 
 	// Check role
@@ -383,7 +420,7 @@ func (a *App) setVerify(action string, email string, pu *gocloak.User, r *http.R
 	return nil
 }
 
-func (a *App) approveUser(w http.ResponseWriter, r *http.Request) {
+func (a *App) approveUserByID(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
 
@@ -411,6 +448,31 @@ func (a *App) approveUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	err = a.client.AddUserToGroup(a.token.AccessToken, "main", id, "04778f5d-31c1-4a2d-a395-7eac07ebc5b7")
+	if err != nil {
+		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+		return
+	}
+
+	httputil.RespondSuccess(w)
+}
+
+func (a *App) approveUserByMail(w http.ResponseWriter, r *http.Request) {
+
+	// Get Pending User by Mail
+	email := r.FormValue("email")
+	pu, err := a.getUserByEmail(email)
+	if err != nil {
+		httputil.RespondWithJSON(w, http.StatusNotFound, err)
+		return
+	}
+
+	err = a.client.DeleteUserFromGroup(a.token.AccessToken, "main", *pu.ID, "c46f3890-fa01-4933-968d-488ba5ca3153")
+	if err != nil {
+		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+		return
+	}
+
+	err = a.client.AddUserToGroup(a.token.AccessToken, "main", *pu.ID, "04778f5d-31c1-4a2d-a395-7eac07ebc5b7")
 	if err != nil {
 		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 		return

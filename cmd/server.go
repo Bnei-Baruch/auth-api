@@ -13,11 +13,10 @@ func Init() {
 	//authUser := os.Getenv("AUTH_USER")
 	//authPass := os.Getenv("AUTH_PASS")
 	clientID := os.Getenv("AUTH_ID")
-	cleintSecret := os.Getenv("AUTH_SECRET")
+	clientSecret := os.Getenv("AUTH_SECRET")
 	skipAuth := os.Getenv("SKIP_AUTH") == "true"
 
 	a := api.App{}
-	a.Initialize(authUrl, accountsUrl, skipAuth, clientID, cleintSecret)
+	a.Initialize(authUrl, accountsUrl, skipAuth, clientID, clientSecret)
 	a.Run(listenAddress)
 }
-

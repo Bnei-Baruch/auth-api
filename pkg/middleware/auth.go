@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/coreos/go-oidc"
@@ -59,7 +60,9 @@ func (c *IDTokenClaims) HasRole(role string) bool {
 func AuthenticationMiddleware(tokenVerifier *oidc.IDTokenVerifier, disabled bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if disabled {
+			key := r.FormValue("key")
+
+			if disabled || key == os.Getenv("AUTH_KEY") {
 				next.ServeHTTP(w, r)
 				return
 			}
