@@ -243,20 +243,43 @@ func (a *App) setPendingByMail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Move from new users to pending
-	err = a.client.DeleteUserFromGroup(a.token.AccessToken, "main", *cu.ID, "85092f0c-19f7-4963-8a27-adf2fae47dc0")
+	// Get User Groups
+	var groups []*gocloak.UserGroup
+	groups, err = a.client.GetUserGroups(a.token.AccessToken, "main", *cu.ID)
 	if err != nil {
 		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 		return
 	}
 
-	err = a.client.AddUserToGroup(a.token.AccessToken, "main", *cu.ID, "c46f3890-fa01-4933-968d-488ba5ca3153")
-	if err != nil {
-		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+	if len(groups) > 0 {
+		for _, g := range groups {
+
+			// Make sure user in new group
+			if *g.ID == "85092f0c-19f7-4963-8a27-adf2fae47dc0" {
+
+				// Move from new users to pending
+				err = a.client.DeleteUserFromGroup(a.token.AccessToken, "main", *cu.ID, "85092f0c-19f7-4963-8a27-adf2fae47dc0")
+				if err != nil {
+					httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+					return
+				}
+
+				err = a.client.AddUserToGroup(a.token.AccessToken, "main", *cu.ID, "c46f3890-fa01-4933-968d-488ba5ca3153")
+				if err != nil {
+					httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+					return
+				}
+
+				httputil.RespondSuccess(w)
+				return
+			}
+		}
+	} else {
+		httputil.RespondWithError(w, http.StatusNotFound, "No group found")
 		return
 	}
 
-	httputil.RespondSuccess(w)
+	httputil.RespondWithError(w, http.StatusNotFound, "Not in new group")
 }
 
 func (a *App) verifyUser(w http.ResponseWriter, r *http.Request) {
@@ -467,19 +490,43 @@ func (a *App) approveUserByMail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = a.client.DeleteUserFromGroup(a.token.AccessToken, "main", *pu.ID, "c46f3890-fa01-4933-968d-488ba5ca3153")
+	// Get User Groups
+	var groups []*gocloak.UserGroup
+	groups, err = a.client.GetUserGroups(a.token.AccessToken, "main", *pu.ID)
 	if err != nil {
 		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 		return
 	}
 
-	err = a.client.AddUserToGroup(a.token.AccessToken, "main", *pu.ID, "04778f5d-31c1-4a2d-a395-7eac07ebc5b7")
-	if err != nil {
-		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+	if len(groups) > 0 {
+		for _, g := range groups {
+
+			// Make sure user in pending group
+			if *g.ID == "c46f3890-fa01-4933-968d-488ba5ca3153" {
+
+				// Move to galaxy group
+				err = a.client.DeleteUserFromGroup(a.token.AccessToken, "main", *pu.ID, "c46f3890-fa01-4933-968d-488ba5ca3153")
+				if err != nil {
+					httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+					return
+				}
+
+				err = a.client.AddUserToGroup(a.token.AccessToken, "main", *pu.ID, "04778f5d-31c1-4a2d-a395-7eac07ebc5b7")
+				if err != nil {
+					httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+					return
+				}
+
+				httputil.RespondSuccess(w)
+				return
+			}
+		}
+	} else {
+		httputil.RespondWithError(w, http.StatusNotFound, "No group found")
 		return
 	}
 
-	httputil.RespondSuccess(w)
+	httputil.RespondWithError(w, http.StatusNotFound, "Not in pending group")
 }
 
 func (a *App) removeUser(w http.ResponseWriter, r *http.Request) {
