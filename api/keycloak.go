@@ -233,12 +233,13 @@ func (a *App) setRequest(w http.ResponseWriter, r *http.Request) {
 	httputil.RespondSuccess(w)
 }
 
-func (a *App) setPending(w http.ResponseWriter, r *http.Request) {
+func (a *App) setPendingByMail(w http.ResponseWriter, r *http.Request) {
 
-	// Get Current User
-	cu, err := a.getCurrentUser(r)
+	// Get Pending User by Mail
+	email := r.FormValue("email")
+	cu, err := a.getUserByEmail(email)
 	if err != nil {
-		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+		httputil.RespondWithJSON(w, http.StatusNotFound, err)
 		return
 	}
 

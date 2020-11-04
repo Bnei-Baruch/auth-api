@@ -103,7 +103,7 @@ func (a *App) initializeRoutes() {
 	a.Router.HandleFunc("/users/{id}", a.getGroupUsers).Methods("GET")
 	a.Router.HandleFunc("/request", a.setRequest).Methods("GET")
 	a.Router.HandleFunc("/verify", a.verifyUser).Methods("GET")
-	a.Router.HandleFunc("/pending", a.setPending).Methods("GET")
+	a.Router.HandleFunc("/pending", a.setPendingByMail).Methods("GET")
 	a.Router.HandleFunc("/approve/{id}", a.approveUserByID).Methods("GET")
 	a.Router.HandleFunc("/approve", a.approveUserByMail).Methods("GET")
 	a.Router.HandleFunc("/remove/{id}", a.removeUser).Methods("GET")
