@@ -264,7 +264,55 @@ func (a *App) setPendingByMail(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 
-				err = a.client.AddUserToGroup(a.token.AccessToken, "main", *cu.ID, "c46f3890-fa01-4933-968d-488ba5ca3153")
+				err = a.client.AddUserToGroup(a.token.AccessToken, "main", *cu.ID, "c42addf9-5ef6-474c-b5ef-ccc07179c97e")
+				if err != nil {
+					httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+					return
+				}
+
+				httputil.RespondSuccess(w)
+				return
+			}
+		}
+	} else {
+		httputil.RespondWithError(w, http.StatusNotFound, "No group found")
+		return
+	}
+
+	httputil.RespondWithError(w, http.StatusNotFound, "Not in new group")
+}
+
+func (a *App) setPending(w http.ResponseWriter, r *http.Request) {
+
+	// Get Current User
+	cu, err := a.getCurrentUser(r)
+	if err != nil {
+		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+		return
+	}
+
+	// Get User Groups
+	var groups []*gocloak.UserGroup
+	groups, err = a.client.GetUserGroups(a.token.AccessToken, "main", *cu.ID)
+	if err != nil {
+		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+		return
+	}
+
+	if len(groups) > 0 {
+		for _, g := range groups {
+
+			// Make sure user in new group
+			if *g.ID == "85092f0c-19f7-4963-8a27-adf2fae47dc0" {
+
+				// Move from new users to pending
+				err = a.client.DeleteUserFromGroup(a.token.AccessToken, "main", *cu.ID, "85092f0c-19f7-4963-8a27-adf2fae47dc0")
+				if err != nil {
+					httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+					return
+				}
+
+				err = a.client.AddUserToGroup(a.token.AccessToken, "main", *cu.ID, "c42addf9-5ef6-474c-b5ef-ccc07179c97e")
 				if err != nil {
 					httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 					return
@@ -480,14 +528,13 @@ func (a *App) approveUserByID(w http.ResponseWriter, r *http.Request) {
 	httputil.RespondSuccess(w)
 }
 
-func (a *App) approveUserByMail(w http.ResponseWriter, r *http.Request) {
+func (a *App) approveUser(w http.ResponseWriter, r *http.Request) {
 
-	// Get Pending User by Mail
-	email := r.FormValue("email")
-	pu, err := a.getUserByEmail(email)
+	// Get Pending User by ID
+	id := r.FormValue("id")
+	pu, err := a.client.GetUserByID(a.token.AccessToken, "main", id)
 	if err != nil {
 		httputil.RespondWithJSON(w, http.StatusNotFound, err)
-		return
 	}
 
 	// Get User Groups
@@ -502,10 +549,10 @@ func (a *App) approveUserByMail(w http.ResponseWriter, r *http.Request) {
 		for _, g := range groups {
 
 			// Make sure user in pending group
-			if *g.ID == "c46f3890-fa01-4933-968d-488ba5ca3153" {
+			if *g.ID == "c42addf9-5ef6-474c-b5ef-ccc07179c97e" {
 
 				// Move to galaxy group
-				err = a.client.DeleteUserFromGroup(a.token.AccessToken, "main", *pu.ID, "c46f3890-fa01-4933-968d-488ba5ca3153")
+				err = a.client.DeleteUserFromGroup(a.token.AccessToken, "main", *pu.ID, "c42addf9-5ef6-474c-b5ef-ccc07179c97e")
 				if err != nil {
 					httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 					return
