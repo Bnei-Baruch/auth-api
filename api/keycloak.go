@@ -12,6 +12,14 @@ import (
 	"time"
 )
 
+const (
+	NewUsers      = "85092f0c-19f7-4963-8a27-adf2fae47dc0"
+	GalaxyPending = "c42addf9-5ef6-474c-b5ef-ccc07179c97e"
+	GalaxyGuests  = "e1617f1a-ab58-4981-b087-9b997726b821"
+	GalaxyUsers   = "04778f5d-31c1-4a2d-a395-7eac07ebc5b7"
+	BannedUsers   = "c4569eaa-c67d-446e-b370-ad426a006c6b"
+)
+
 func (a *App) getGroups(w http.ResponseWriter, r *http.Request) {
 	g, err := a.client.GetGroups(a.token.AccessToken, "main", gocloak.GetGroupsParams{})
 	if err != nil {
@@ -164,7 +172,7 @@ func (a *App) getRequestedUser(email string) (*gocloak.User, error) {
 	// Make sure requested user in galaxy group
 	if len(groups) > 0 {
 		for _, g := range groups {
-			if *g.ID == "04778f5d-31c1-4a2d-a395-7eac07ebc5b7" {
+			if *g.ID == GalaxyUsers {
 				return user, nil
 			}
 		}
@@ -255,16 +263,16 @@ func (a *App) setPendingByMail(w http.ResponseWriter, r *http.Request) {
 		for _, g := range groups {
 
 			// Make sure user in new group
-			if *g.ID == "85092f0c-19f7-4963-8a27-adf2fae47dc0" {
+			if *g.ID == NewUsers {
 
 				// Move from new users to pending
-				err = a.client.DeleteUserFromGroup(a.token.AccessToken, "main", *cu.ID, "85092f0c-19f7-4963-8a27-adf2fae47dc0")
+				err = a.client.DeleteUserFromGroup(a.token.AccessToken, "main", *cu.ID, NewUsers)
 				if err != nil {
 					httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 					return
 				}
 
-				err = a.client.AddUserToGroup(a.token.AccessToken, "main", *cu.ID, "c42addf9-5ef6-474c-b5ef-ccc07179c97e")
+				err = a.client.AddUserToGroup(a.token.AccessToken, "main", *cu.ID, GalaxyPending)
 				if err != nil {
 					httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 					return
@@ -303,16 +311,16 @@ func (a *App) setPending(w http.ResponseWriter, r *http.Request) {
 		for _, g := range groups {
 
 			// Make sure user in new group
-			if *g.ID == "85092f0c-19f7-4963-8a27-adf2fae47dc0" {
+			if *g.ID == NewUsers {
 
 				// Move from new users to pending
-				err = a.client.DeleteUserFromGroup(a.token.AccessToken, "main", *cu.ID, "85092f0c-19f7-4963-8a27-adf2fae47dc0")
+				err = a.client.DeleteUserFromGroup(a.token.AccessToken, "main", *cu.ID, NewUsers)
 				if err != nil {
 					httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 					return
 				}
 
-				err = a.client.AddUserToGroup(a.token.AccessToken, "main", *cu.ID, "c42addf9-5ef6-474c-b5ef-ccc07179c97e")
+				err = a.client.AddUserToGroup(a.token.AccessToken, "main", *cu.ID, GalaxyPending)
 				if err != nil {
 					httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 					return
@@ -528,52 +536,73 @@ func (a *App) approveUserByID(w http.ResponseWriter, r *http.Request) {
 	httputil.RespondSuccess(w)
 }
 
-func (a *App) approveUser(w http.ResponseWriter, r *http.Request) {
+func (a *App) changeStatus(w http.ResponseWriter, r *http.Request) {
 
-	// Get Pending User by ID
-	id := r.FormValue("id")
-	pu, err := a.client.GetUserByID(a.token.AccessToken, "main", id)
-	if err != nil {
-		httputil.RespondWithJSON(w, http.StatusNotFound, err)
-	}
+	groupId := r.FormValue("group_id")
 
-	// Get User Groups
-	var groups []*gocloak.UserGroup
-	groups, err = a.client.GetUserGroups(a.token.AccessToken, "main", *pu.ID)
-	if err != nil {
-		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
-		return
-	}
+	//Allow only these groups in option
+	if groupId == GalaxyGuests || groupId == GalaxyPending || groupId == BannedUsers || groupId == GalaxyUsers {
 
-	if len(groups) > 0 {
-		for _, g := range groups {
+		// Get Pending User by ID
+		userId := r.FormValue("user_id")
+		pu, err := a.client.GetUserByID(a.token.AccessToken, "main", userId)
+		if err != nil {
+			httputil.RespondWithJSON(w, http.StatusNotFound, err)
+			return
+		}
 
-			// Make sure user in pending group
-			if *g.ID == "c42addf9-5ef6-474c-b5ef-ccc07179c97e" {
+		// Get User Groups
+		var groups []*gocloak.UserGroup
+		groups, err = a.client.GetUserGroups(a.token.AccessToken, "main", *pu.ID)
+		if err != nil {
+			httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+			return
+		}
 
-				// Move to galaxy group
-				err = a.client.DeleteUserFromGroup(a.token.AccessToken, "main", *pu.ID, "c42addf9-5ef6-474c-b5ef-ccc07179c97e")
-				if err != nil {
-					httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
-					return
+		// Remove only needed group
+		if len(groups) > 0 {
+			for _, v := range groups {
+				if *v.ID == GalaxyPending || *v.ID == GalaxyGuests {
+					err := a.client.DeleteUserFromGroup(a.token.AccessToken, "main", userId, *v.ID)
+					if err != nil {
+						httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+						return
+					}
 				}
+			}
 
-				err = a.client.AddUserToGroup(a.token.AccessToken, "main", *pu.ID, "04778f5d-31c1-4a2d-a395-7eac07ebc5b7")
-				if err != nil {
-					httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
-					return
-				}
-
-				httputil.RespondSuccess(w)
+			// Add to requested group
+			err = a.client.AddUserToGroup(a.token.AccessToken, "main", *pu.ID, groupId)
+			if err != nil {
+				httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 				return
 			}
+
+			// Disable banned user
+			if groupId == BannedUsers {
+				*pu.Enabled = false
+				err = a.client.UpdateUser(a.token.AccessToken, "main", *pu)
+				if err != nil {
+					httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+					return
+				}
+			}
+
+			httputil.RespondSuccess(w)
+			return
+
+		} else {
+
+			httputil.RespondWithError(w, http.StatusNotFound, "Not found any group")
+			return
+
 		}
 	} else {
-		httputil.RespondWithError(w, http.StatusNotFound, "No group found")
-		return
-	}
 
-	httputil.RespondWithError(w, http.StatusNotFound, "Not in pending group")
+		httputil.RespondWithError(w, http.StatusBadRequest, "Not valid group id")
+		return
+
+	}
 }
 
 func (a *App) removeUser(w http.ResponseWriter, r *http.Request) {
