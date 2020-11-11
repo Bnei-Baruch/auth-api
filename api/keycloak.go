@@ -561,6 +561,16 @@ func (a *App) changeStatus(w http.ResponseWriter, r *http.Request) {
 
 		// Remove only needed group
 		if len(groups) > 0 {
+
+			// Don't allow change user from banned and galaxy groups
+			for _, v := range groups {
+				if *v.ID == BannedUsers || *v.ID == GalaxyUsers {
+					httputil.RespondWithError(w, http.StatusBadRequest, "Not allow changes")
+					return
+				}
+			}
+
+			// Remove user from pending or guests groups
 			for _, v := range groups {
 				if *v.ID == GalaxyPending || *v.ID == GalaxyGuests {
 					err := a.client.DeleteUserFromGroup(a.token.AccessToken, "main", userId, *v.ID)
