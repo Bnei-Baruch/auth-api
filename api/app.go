@@ -30,6 +30,7 @@ func (a *App) Initialize(authUrl string, accountsUrl string, skipAuth bool, clie
 
 func (a *App) InitializeWithDB(accountsUrl string, skipAuth bool) {
 
+	ClientMQTT()
 	a.Router = mux.NewRouter()
 	a.initializeRoutes()
 

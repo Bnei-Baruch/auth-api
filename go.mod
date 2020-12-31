@@ -5,6 +5,8 @@ go 1.14
 require (
 	github.com/Nerzal/gocloak/v5 v5.1.0
 	github.com/coreos/go-oidc v2.2.1+incompatible
+	github.com/eclipse/paho.golang v0.9.0
+	github.com/goiiot/libmqtt v0.9.6
 	github.com/gorilla/handlers v1.4.2
 	github.com/gorilla/mux v1.7.4
 	github.com/pkg/errors v0.9.1
