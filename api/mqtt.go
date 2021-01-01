@@ -1,14 +1,13 @@
 package api
 
 import (
-	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"github.com/eclipse/paho.golang/paho"
-	"github.com/eclipse/paho.golang/paho/extensions/rpc"
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"log"
 	"os"
+	"time"
 )
 
 type Request struct {
@@ -19,60 +18,21 @@ type Request struct {
 
 func ClientMQTT() {
 	server := os.Getenv("MQTT_URL")
-	topic := "galaxy/room/1051"
 	username := os.Getenv("MQTT_USER")
 	password := os.Getenv("MQTT_PASS")
 
-	conn, err := tls.Dial("tcp", server, nil)
-
-	if err != nil {
-		log.Fatalf("Failed to connect to %s: %s", server, err)
+	opts := mqtt.NewClientOptions()
+	opts.AddBroker(fmt.Sprintf("ssl://%s", server))
+	opts.SetClientID("go_mqtt_client")
+	opts.SetUsername(username)
+	opts.SetPassword(password)
+	opts.SetDefaultPublishHandler(messagePubHandler)
+	opts.OnConnect = connectHandler
+	opts.OnConnectionLost = connectLostHandler
+	client := mqtt.NewClient(opts)
+	if token := client.Connect(); token.Wait() && token.Error() != nil {
+		panic(token.Error())
 	}
-
-	c := paho.NewClient()
-	c.Conn = conn
-	c.Router.RegisterHandler("galaxy/room/1051", onMessage)
-
-	cp := &paho.Connect{
-		KeepAlive:  30,
-		CleanStart: true,
-		ClientID:   "listen1",
-		Username:   username,
-		Password:   []byte(password),
-	}
-
-	cp.UsernameFlag = true
-	cp.PasswordFlag = true
-
-	ca, err := c.Connect(context.Background(), cp)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	if ca.ReasonCode != 0 {
-		log.Fatalf("Failed to connect to %s : %d - %s", server, ca.ReasonCode, ca.Properties.ReasonString)
-	}
-
-	fmt.Printf("Connected to %s\n", server)
-
-	_, err = c.Subscribe(context.Background(), &paho.Subscribe{
-		Subscriptions: map[string]paho.SubscribeOptions{
-			topic: paho.SubscribeOptions{QoS: 2},
-		},
-	})
-
-	if err != nil {
-		log.Fatalf("failed to subscribe: %s", err)
-	}
-
-	h, err := rpc.NewHandler(c)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_, err = h.Request(&paho.Publish{
-		Topic:   "galaxy/room/1051",
-		Payload: []byte(`{"function":"mul", "param1": 10, "param2": 5}`),
-	})
 }
 
 func onMessage(p *paho.Publish) {
@@ -82,4 +42,34 @@ func onMessage(p *paho.Publish) {
 		log.Printf("Failed to decode Request: %v", pMsg)
 	}
 	log.Printf("Decoded message: %v", pMsg)
+}
+
+var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
+	fmt.Printf("Received message: %s from topic: %s\n", msg.Payload(), msg.Topic())
+}
+
+var connectHandler mqtt.OnConnectHandler = func(client mqtt.Client) {
+	fmt.Println("Connected")
+	sub(client)
+}
+
+var connectLostHandler mqtt.ConnectionLostHandler = func(client mqtt.Client, err error) {
+	fmt.Printf("Connect lost: %v", err)
+}
+
+func publish(client mqtt.Client) {
+	num := 10
+	for i := 0; i < num; i++ {
+		text := fmt.Sprintf("Message %d", i)
+		token := client.Publish("topic/test", 0, false, text)
+		token.Wait()
+		time.Sleep(time.Second)
+	}
+}
+
+func sub(client mqtt.Client) {
+	topic := "galaxy/room/1051"
+	token := client.Subscribe(topic, 2, nil)
+	token.Wait()
+	fmt.Printf("Subscribed to topic: %s", topic)
 }
