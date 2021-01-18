@@ -106,7 +106,7 @@ func (a *App) getGroupUsers(w http.ResponseWriter, r *http.Request) {
 	httputil.RespondWithJSON(w, http.StatusOK, g)
 }
 
-func (a *App) getUserByID(w http.ResponseWriter, r *http.Request) {
+func (a *App) searchUser(w http.ResponseWriter, r *http.Request) {
 	// Check role
 	authAdmin := checkRole("auth_admin", r)
 	if !authAdmin {
@@ -115,16 +115,34 @@ func (a *App) getUserByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vars := mux.Vars(r)
-	id := vars["id"]
-	var user *gocloak.User
-	ctx := context.Background()
-	user, err := a.client.GetUserByID(ctx, a.token.AccessToken, "main", id)
-	if err != nil {
-		httputil.RespondWithJSON(w, http.StatusNotFound, err)
+	user := &gocloak.User{}
+	err := errors.New("error")
+	email := r.FormValue("email")
+	id := r.FormValue("id")
+
+	if email == "" && id == "" {
+		httputil.RespondWithError(w, http.StatusBadRequest, "Params not found")
+		return
 	}
 
-	iden, err := a.client.GetUserFederatedIdentities(ctx, a.token.AccessToken, "main", id)
+	if email != "" {
+		user, err = a.getUserByEmail(email)
+		if err != nil {
+			httputil.RespondWithJSON(w, http.StatusNotFound, err)
+			return
+		}
+	}
+
+	if id != "" {
+		user, err = a.getUserByID(id)
+		if err != nil {
+			httputil.RespondWithJSON(w, http.StatusNotFound, err)
+			return
+		}
+	}
+
+	ctx := context.Background()
+	iden, err := a.client.GetUserFederatedIdentities(ctx, a.token.AccessToken, "main", *user.ID)
 
 	uapi := &UserAPI{
 		user.ID,
@@ -140,6 +158,17 @@ func (a *App) getUserByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httputil.RespondWithJSON(w, http.StatusOK, uapi)
+}
+
+func (a *App) getUserByID(id string) (*gocloak.User, error) {
+	var user *gocloak.User
+	ctx := context.Background()
+	user, err := a.client.GetUserByID(ctx, a.token.AccessToken, "main", id)
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
 }
 
 func (a *App) getUserByEmail(email string) (*gocloak.User, error) {
