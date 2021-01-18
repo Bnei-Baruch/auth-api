@@ -21,6 +21,19 @@ const (
 	BannedUsers   = "c4569eaa-c67d-446e-b370-ad426a006c6b"
 )
 
+type UserAPI struct {
+	ID               *string                                    `json:"id,omitempty"`
+	CreatedTimestamp *int64                                     `json:"createdTimestamp,omitempty"`
+	Username         *string                                    `json:"username,omitempty"`
+	Enabled          *bool                                      `json:"enabled,omitempty"`
+	EmailVerified    *bool                                      `json:"emailVerified,omitempty"`
+	FirstName        *string                                    `json:"firstName,omitempty"`
+	LastName         *string                                    `json:"lastName,omitempty"`
+	Email            *string                                    `json:"email,omitempty"`
+	Attributes       *map[string][]string                       `json:"attributes,omitempty"`
+	Social           []*gocloak.FederatedIdentityRepresentation `json:"social,omitempty"`
+}
+
 func (a *App) getGroups(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 	g, err := a.client.GetGroups(ctx, a.token.AccessToken, "main", gocloak.GetGroupsParams{})
@@ -95,12 +108,12 @@ func (a *App) getGroupUsers(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) getUserByID(w http.ResponseWriter, r *http.Request) {
 	// Check role
-	//authAdmin := checkRole("auth_admin", r)
-	//if !authAdmin {
-	//	e := errors.New("bad permission")
-	//	httputil.NewUnauthorizedError(e).Abort(w, r)
-	//	return
-	//}
+	authAdmin := checkRole("auth_admin", r)
+	if !authAdmin {
+		e := errors.New("bad permission")
+		httputil.NewUnauthorizedError(e).Abort(w, r)
+		return
+	}
 
 	vars := mux.Vars(r)
 	id := vars["id"]
@@ -111,7 +124,22 @@ func (a *App) getUserByID(w http.ResponseWriter, r *http.Request) {
 		httputil.RespondWithJSON(w, http.StatusNotFound, err)
 	}
 
-	httputil.RespondWithJSON(w, http.StatusOK, user)
+	iden, err := a.client.GetUserFederatedIdentities(ctx, a.token.AccessToken, "main", id)
+
+	uapi := &UserAPI{
+		user.ID,
+		user.CreatedTimestamp,
+		user.Username,
+		user.Enabled,
+		user.EmailVerified,
+		user.FirstName,
+		user.LastName,
+		user.Email,
+		user.Attributes,
+		iden,
+	}
+
+	httputil.RespondWithJSON(w, http.StatusOK, uapi)
 }
 
 func (a *App) getUserByEmail(email string) (*gocloak.User, error) {
