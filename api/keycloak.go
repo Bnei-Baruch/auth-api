@@ -32,6 +32,7 @@ type UserAPI struct {
 	Email            *string                                    `json:"email,omitempty"`
 	Attributes       *map[string][]string                       `json:"attributes,omitempty"`
 	Social           []*gocloak.FederatedIdentityRepresentation `json:"social,omitempty"`
+	Groups           []*gocloak.UserGroup                       `json:"groups,omitempty"`
 }
 
 func (a *App) getGroups(w http.ResponseWriter, r *http.Request) {
@@ -142,7 +143,10 @@ func (a *App) searchUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := context.Background()
-	iden, err := a.client.GetUserFederatedIdentities(ctx, a.token.AccessToken, "main", *user.ID)
+	var groups []*gocloak.UserGroup
+	params := gocloak.GetGroupsParams{}
+	groups, _ = a.client.GetUserGroups(ctx, a.token.AccessToken, "main", *user.ID, params)
+	iden, _ := a.client.GetUserFederatedIdentities(ctx, a.token.AccessToken, "main", *user.ID)
 
 	uapi := &UserAPI{
 		user.ID,
@@ -155,6 +159,7 @@ func (a *App) searchUser(w http.ResponseWriter, r *http.Request) {
 		user.Email,
 		user.Attributes,
 		iden,
+		groups,
 	}
 
 	httputil.RespondWithJSON(w, http.StatusOK, uapi)
