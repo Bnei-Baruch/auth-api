@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/Nerzal/gocloak/v5"
+	"github.com/Nerzal/gocloak/v7"
 	"github.com/coreos/go-oidc"
 	"github.com/gorilla/mux"
 	"github.com/rs/cors"
@@ -73,8 +73,9 @@ func (a *App) initOidc(issuer string) {
 
 func (a *App) initAuthClient(issuer string, u string, p string) {
 	client := gocloak.NewClient(issuer)
-	//token, err := client.LoginAdmin(u, p, "master")
-	token, err := client.LoginClient(u, p, "master")
+	ctx := context.Background()
+	//token, err := client.LoginAdmin(ctx, u, p, "master")
+	token, err := client.LoginClient(ctx, u, p, "master")
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed init auth client")
 	}

@@ -4,6 +4,7 @@ go 1.14
 
 require (
 	github.com/Nerzal/gocloak/v5 v5.1.0
+	github.com/Nerzal/gocloak/v7 v7.11.0
 	github.com/coreos/go-oidc v2.2.1+incompatible
 	github.com/gorilla/handlers v1.4.2
 	github.com/gorilla/mux v1.7.4
