@@ -225,7 +225,6 @@ func (a *App) regCheck(w http.ResponseWriter, r *http.Request) {
 			httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 			return
 		}
-		return
 	}
 
 	// Get User by email
