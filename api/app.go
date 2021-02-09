@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"os"
 
 	"github.com/Nerzal/gocloak/v5"
 	"github.com/coreos/go-oidc"
@@ -19,6 +20,7 @@ type App struct {
 	tokenVerifier *oidc.IDTokenVerifier
 	client        gocloak.GoCloak
 	token         *gocloak.JWT
+	mqttListener  *MQTTListener
 }
 
 func (a *App) Initialize(authUrl string, accountsUrl string, skipAuth bool, clientID string, clientSecret string) {
@@ -30,7 +32,7 @@ func (a *App) Initialize(authUrl string, accountsUrl string, skipAuth bool, clie
 
 func (a *App) InitializeWithDB(accountsUrl string, skipAuth bool) {
 
-	ClientMQTT()
+	a.initMQTT()
 	a.Router = mux.NewRouter()
 	a.initializeRoutes()
 
@@ -109,4 +111,13 @@ func (a *App) initializeRoutes() {
 	a.Router.HandleFunc("/approve/{id}", a.approveUserByID).Methods("GET")
 	a.Router.HandleFunc("/remove/{id}", a.removeUser).Methods("GET")
 	a.Router.HandleFunc("/cleanup", a.cleanUsers).Methods("GET")
+}
+
+func (a *App) initMQTT() {
+	if os.Getenv("MQTT_URL") != "" {
+		a.mqttListener = NewMQTTListener()
+		if err := a.mqttListener.Start(); err != nil {
+			log.Fatal().Err(err).Msg("initialize mqtt listener")
+		}
+	}
 }

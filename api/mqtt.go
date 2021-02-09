@@ -1,75 +1,142 @@
 package api
 
 import (
+	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"github.com/eclipse/paho.golang/paho"
-	mqtt "github.com/eclipse/paho.mqtt.golang"
-	"log"
+	"math"
+	"net"
 	"os"
-	"time"
+
+	"github.com/eclipse/paho.golang/paho"
+	pkgerr "github.com/pkg/errors"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
-type Request struct {
-	Function string `json:"function"`
-	Param1   int    `json:"param1"`
-	Param2   int    `json:"param2"`
+type MQTTListener struct {
+	client *paho.Client
 }
 
-func ClientMQTT() {
-	server := os.Getenv("MQTT_URL")
-	username := os.Getenv("MQTT_USER")
-	password := os.Getenv("MQTT_PASS")
+func NewMQTTListener() *MQTTListener {
+	return &MQTTListener{}
+}
 
-	opts := mqtt.NewClientOptions()
-	opts.AddBroker(fmt.Sprintf("ssl://%s", server))
-	opts.SetClientID("go_mqtt_client")
-	opts.SetUsername(username)
-	opts.SetPassword(password)
-	opts.SetDefaultPublishHandler(messagePubHandler)
-	opts.OnConnect = connectHandler
-	opts.OnConnectionLost = connectLostHandler
-	client := mqtt.NewClient(opts)
-	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		panic(token.Error())
+func (l *MQTTListener) Start() error {
+	l.client = paho.NewClient(paho.ClientConfig{
+		ClientID: "go_client_id",
+		OnConnectionLost: func(err error) {
+			log.Warn().Msgf("MQTT OnConnectionLost: %+v", err)
+			if err := l.init(); err != nil {
+				log.Error().Err(err).Msg("error initializing mqtt on connection lost")
+			}
+		},
+	})
+	l.client.SetErrorLogger(NewPahoLogAdapter(zerolog.ErrorLevel))
+	debugLog := NewPahoLogAdapter(zerolog.InfoLevel)
+	l.client.SetDebugLogger(debugLog)
+	l.client.PingHandler.SetDebug(debugLog)
+	l.client.Router.SetDebug(debugLog)
+	return l.init()
+}
+
+func (l *MQTTListener) init() error {
+	log.Info().Msg("Initializing MQTT Listener")
+
+	var conn net.Conn
+	var err error
+	if os.Getenv("MQTT_SSL") == "true" {
+		conn, err = tls.Dial("tcp", os.Getenv("MQTT_URL"), nil)
+	} else {
+		conn, err = net.Dial("tcp", os.Getenv("MQTT_URL"))
+	}
+	if err != nil {
+		return pkgerr.Wrap(err, "conn.Dial")
+	}
+
+	l.client.Conn = conn
+
+	var sessionExpiryInterval = uint32(math.MaxUint32)
+
+	cp := &paho.Connect{
+		ClientID:   "auth_api_client",
+		KeepAlive:  30,
+		CleanStart: true,
+		Properties: &paho.ConnectProperties{
+			SessionExpiryInterval: &sessionExpiryInterval,
+		},
+	}
+
+	pwd := os.Getenv("MQTT_PASS")
+
+	if pwd != "" {
+		cp.Username = "auth_api_user"
+		cp.Password = []byte(pwd)
+		cp.UsernameFlag = true
+		cp.PasswordFlag = true
+	}
+
+	ca, err := l.client.Connect(context.Background(), cp)
+	if err != nil {
+		return pkgerr.Wrap(err, "client.Connect")
+	}
+	if ca.ReasonCode != 0 {
+		return pkgerr.Errorf("MQTT connect error: %d - %s", ca.ReasonCode, ca.Properties.ReasonString)
+	}
+
+	l.client.Router.RegisterHandler("galaxy/service/#", l.HandleServiceProtocol)
+
+	sa, err := l.client.Subscribe(context.Background(), &paho.Subscribe{
+		Subscriptions: map[string]paho.SubscribeOptions{
+			"galaxy/service/#": {QoS: byte(2)},
+		},
+	})
+	if err != nil {
+		return pkgerr.Wrap(err, "client.Subscribe")
+	}
+	if sa.Reasons[0] != byte(2) {
+		return pkgerr.Errorf("MQTT subscribe error: %d ", sa.Reasons[0])
+	}
+
+	return nil
+}
+
+func (l *MQTTListener) Close() error {
+	if err := l.client.Disconnect(&paho.Disconnect{ReasonCode: 0}); err != nil {
+		return pkgerr.Wrap(err, "client.Disconnect")
+	}
+	return nil
+}
+
+func (l *MQTTListener) HandleServiceProtocol(p *paho.Publish) {
+	log.Info().Str("payload", p.String()).Msg("MQTT handle service protocol")
+	if err := HandleMessage(string(p.Payload)); err != nil {
+		log.Error().Err(err).Msg("service protocol error")
 	}
 }
 
-func onMessage(p *paho.Publish) {
-	log.Printf("Got message: %v", p.String())
+type PahoLogAdapter struct {
+	level zerolog.Level
+}
+
+func NewPahoLogAdapter(level zerolog.Level) *PahoLogAdapter {
+	return &PahoLogAdapter{level: level}
+}
+
+func (a *PahoLogAdapter) Println(v ...interface{}) {
+	log.WithLevel(a.level).Msgf("mqtt: %s", fmt.Sprint(v...))
+}
+
+func (a *PahoLogAdapter) Printf(format string, v ...interface{}) {
+	log.WithLevel(a.level).Msgf("mqtt: %s", fmt.Sprintf(format, v...))
+}
+
+func HandleMessage(payload string) error {
 	var pMsg map[string]interface{}
-	if err := json.Unmarshal([]byte(string(p.Payload)), &pMsg); err != nil {
-		log.Printf("Failed to decode Request: %v", pMsg)
+	if err := json.Unmarshal([]byte(payload), &pMsg); err != nil {
+		return pkgerr.Errorf("json.Unmarshal: %s", err)
 	}
-	log.Printf("Decoded message: %v", pMsg)
-}
 
-var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
-	fmt.Printf("Received message: %s from topic: %s\n", msg.Payload(), msg.Topic())
-}
-
-var connectHandler mqtt.OnConnectHandler = func(client mqtt.Client) {
-	fmt.Println("Connected")
-	sub(client)
-}
-
-var connectLostHandler mqtt.ConnectionLostHandler = func(client mqtt.Client, err error) {
-	fmt.Printf("Connect lost: %v", err)
-}
-
-func publish(client mqtt.Client) {
-	num := 10
-	for i := 0; i < num; i++ {
-		text := fmt.Sprintf("Message %d", i)
-		token := client.Publish("topic/test", 0, false, text)
-		token.Wait()
-		time.Sleep(time.Second)
-	}
-}
-
-func sub(client mqtt.Client) {
-	topic := "galaxy/room/1051"
-	token := client.Subscribe(topic, 2, nil)
-	token.Wait()
-	fmt.Printf("Subscribed to topic: %s", topic)
+	return nil
 }
