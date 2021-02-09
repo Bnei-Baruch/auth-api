@@ -19,6 +19,7 @@ const (
 	GalaxyGuests  = "e1617f1a-ab58-4981-b087-9b997726b821"
 	GalaxyUsers   = "04778f5d-31c1-4a2d-a395-7eac07ebc5b7"
 	BannedUsers   = "c4569eaa-c67d-446e-b370-ad426a006c6b"
+	KenesOlami    = "38275a65-46e4-4294-817b-031e4c07bf2e"
 )
 
 type UserAPI struct {
@@ -208,6 +209,68 @@ func checkRole(role string, r *http.Request) bool {
 		}
 	}
 	return false
+}
+
+func (a *App) regCheck(w http.ResponseWriter, r *http.Request) {
+
+	user := &gocloak.User{}
+	err := errors.New("error")
+	email := r.FormValue("email")
+	id := r.FormValue("id")
+
+	// Get User from current token
+	if email == "" && id == "" {
+		user, err = a.getCurrentUser(r)
+		if err != nil {
+			httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+			return
+		}
+		return
+	}
+
+	// Get User by email
+	if email != "" {
+		user, err = a.getUserByEmail(email)
+		if err != nil {
+			httputil.RespondWithJSON(w, http.StatusNotFound, err)
+			return
+		}
+	}
+
+	// Get User by ID
+	if id != "" {
+		user, err = a.getUserByID(id)
+		if err != nil {
+			httputil.RespondWithJSON(w, http.StatusNotFound, err)
+			return
+		}
+	}
+
+	// Get User Groups
+	var groups []*gocloak.UserGroup
+	params := gocloak.GetGroupsParams{}
+	ctx := context.Background()
+	groups, err = a.client.GetUserGroups(ctx, a.token.AccessToken, "main", *user.ID, params)
+	if err != nil {
+		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+		return
+	}
+
+	if len(groups) > 0 {
+		for _, g := range groups {
+
+			// Check if user in needed group
+			if *g.ID == KenesOlami {
+				httputil.RespondSuccess(w)
+				return
+			}
+		}
+	} else {
+		httputil.RespondWithError(w, http.StatusNotFound, "No group found")
+		return
+	}
+
+	httputil.RespondWithError(w, http.StatusNotFound, "failed")
 }
 
 func (a *App) getCurrentUser(r *http.Request) (*gocloak.User, error) {
