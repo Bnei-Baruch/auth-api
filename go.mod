@@ -3,7 +3,7 @@ module github.com/Bnei-Baruch/auth-api
 go 1.14
 
 require (
-	github.com/Nerzal/gocloak/v5 v5.5.0
+	github.com/Nerzal/gocloak/v7 v7.11.0
 	github.com/coreos/go-oidc v2.2.1+incompatible
 	github.com/eclipse/paho.golang v0.9.0
 	github.com/eclipse/paho.mqtt.golang v1.2.0

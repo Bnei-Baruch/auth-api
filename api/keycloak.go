@@ -1,10 +1,11 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"github.com/Bnei-Baruch/auth-api/pkg/httputil"
 	"github.com/Bnei-Baruch/auth-api/pkg/middleware"
-	"github.com/Nerzal/gocloak/v5"
+	"github.com/Nerzal/gocloak/v7"
 	"github.com/gorilla/mux"
 	pkgerr "github.com/pkg/errors"
 	"net/http"
@@ -20,8 +21,23 @@ const (
 	BannedUsers   = "c4569eaa-c67d-446e-b370-ad426a006c6b"
 )
 
+type UserAPI struct {
+	ID               *string                                    `json:"id,omitempty"`
+	CreatedTimestamp *int64                                     `json:"createdTimestamp,omitempty"`
+	Username         *string                                    `json:"username,omitempty"`
+	Enabled          *bool                                      `json:"enabled,omitempty"`
+	EmailVerified    *bool                                      `json:"emailVerified,omitempty"`
+	FirstName        *string                                    `json:"firstName,omitempty"`
+	LastName         *string                                    `json:"lastName,omitempty"`
+	Email            *string                                    `json:"email,omitempty"`
+	Attributes       *map[string][]string                       `json:"attributes,omitempty"`
+	Social           []*gocloak.FederatedIdentityRepresentation `json:"social,omitempty"`
+	Groups           []*gocloak.UserGroup                       `json:"groups,omitempty"`
+}
+
 func (a *App) getGroups(w http.ResponseWriter, r *http.Request) {
-	g, err := a.client.GetGroups(a.token.AccessToken, "main", gocloak.GetGroupsParams{})
+	ctx := context.Background()
+	g, err := a.client.GetGroups(ctx, a.token.AccessToken, "main", gocloak.GetGroupsParams{})
 	if err != nil {
 		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 		return
@@ -33,7 +49,8 @@ func (a *App) getGroups(w http.ResponseWriter, r *http.Request) {
 func (a *App) getUsers(w http.ResponseWriter, r *http.Request) {
 	value := false
 	params := gocloak.GetUsersParams{BriefRepresentation: &value}
-	g, err := a.client.GetUsers(a.token.AccessToken, "main", params)
+	ctx := context.Background()
+	g, err := a.client.GetUsers(ctx, a.token.AccessToken, "main", params)
 	if err != nil {
 		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 		return
@@ -46,7 +63,8 @@ func (a *App) getVerifyUsers(w http.ResponseWriter, r *http.Request) {
 
 	max := 100000
 	params := gocloak.GetUsersParams{Max: &max}
-	u, err := a.client.GetUsers(a.token.AccessToken, "main", params)
+	ctx := context.Background()
+	u, err := a.client.GetUsers(ctx, a.token.AccessToken, "main", params)
 	if err != nil {
 		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 		return
@@ -54,7 +72,8 @@ func (a *App) getVerifyUsers(w http.ResponseWriter, r *http.Request) {
 
 	var ar []*gocloak.User
 	for _, v := range u {
-		if _, ok := v.Attributes["approved"]; ok {
+		attr := *v.Attributes
+		if _, b := attr["approved"]; b {
 			ar = append(ar, v)
 		}
 	}
@@ -78,7 +97,8 @@ func (a *App) getGroupUsers(w http.ResponseWriter, r *http.Request) {
 	id := vars["id"]
 	max := 10000
 	params := gocloak.GetGroupsParams{Max: &max}
-	g, err := a.client.GetGroupMembers(a.token.AccessToken, "main", id, params)
+	ctx := context.Background()
+	g, err := a.client.GetGroupMembers(ctx, a.token.AccessToken, "main", id, params)
 	if err != nil {
 		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 		return
@@ -87,7 +107,7 @@ func (a *App) getGroupUsers(w http.ResponseWriter, r *http.Request) {
 	httputil.RespondWithJSON(w, http.StatusOK, g)
 }
 
-func (a *App) getUserByID(w http.ResponseWriter, r *http.Request) {
+func (a *App) searchUser(w http.ResponseWriter, r *http.Request) {
 	// Check role
 	authAdmin := checkRole("auth_admin", r)
 	if !authAdmin {
@@ -96,21 +116,71 @@ func (a *App) getUserByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vars := mux.Vars(r)
-	id := vars["id"]
-	var user *gocloak.User
-	user, err := a.client.GetUserByID(a.token.AccessToken, "main", id)
-	if err != nil {
-		httputil.RespondWithJSON(w, http.StatusNotFound, err)
+	user := &gocloak.User{}
+	err := errors.New("error")
+	email := r.FormValue("email")
+	id := r.FormValue("id")
+
+	if email == "" && id == "" {
+		httputil.RespondWithError(w, http.StatusBadRequest, "Params not found")
+		return
 	}
 
-	httputil.RespondWithJSON(w, http.StatusOK, user)
+	if email != "" {
+		user, err = a.getUserByEmail(email)
+		if err != nil {
+			httputil.RespondWithJSON(w, http.StatusNotFound, err)
+			return
+		}
+	}
+
+	if id != "" {
+		user, err = a.getUserByID(id)
+		if err != nil {
+			httputil.RespondWithJSON(w, http.StatusNotFound, err)
+			return
+		}
+	}
+
+	ctx := context.Background()
+	var groups []*gocloak.UserGroup
+	params := gocloak.GetGroupsParams{}
+	groups, _ = a.client.GetUserGroups(ctx, a.token.AccessToken, "main", *user.ID, params)
+	iden, _ := a.client.GetUserFederatedIdentities(ctx, a.token.AccessToken, "main", *user.ID)
+
+	uapi := &UserAPI{
+		user.ID,
+		user.CreatedTimestamp,
+		user.Username,
+		user.Enabled,
+		user.EmailVerified,
+		user.FirstName,
+		user.LastName,
+		user.Email,
+		user.Attributes,
+		iden,
+		groups,
+	}
+
+	httputil.RespondWithJSON(w, http.StatusOK, uapi)
+}
+
+func (a *App) getUserByID(id string) (*gocloak.User, error) {
+	var user *gocloak.User
+	ctx := context.Background()
+	user, err := a.client.GetUserByID(ctx, a.token.AccessToken, "main", id)
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
 }
 
 func (a *App) getUserByEmail(email string) (*gocloak.User, error) {
 	params := gocloak.GetUsersParams{Email: &email}
 	var users []*gocloak.User
-	users, err := a.client.GetUsers(a.token.AccessToken, "main", params)
+	ctx := context.Background()
+	users, err := a.client.GetUsers(ctx, a.token.AccessToken, "main", params)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +214,8 @@ func (a *App) getCurrentUser(r *http.Request) (*gocloak.User, error) {
 	if rCtx, ok := middleware.ContextFromRequest(r); ok {
 		if rCtx.IDClaims != nil {
 			var user *gocloak.User
-			user, err := a.client.GetUserByID(a.token.AccessToken, "main", rCtx.IDClaims.Sub)
+			ctx := context.Background()
+			user, err := a.client.GetUserByID(ctx, a.token.AccessToken, "main", rCtx.IDClaims.Sub)
 			if err != nil {
 				return nil, err
 			}
@@ -164,7 +235,9 @@ func (a *App) getRequestedUser(email string) (*gocloak.User, error) {
 
 	// Get User Groups
 	var groups []*gocloak.UserGroup
-	groups, err = a.client.GetUserGroups(a.token.AccessToken, "main", *user.ID)
+	params := gocloak.GetGroupsParams{}
+	ctx := context.Background()
+	groups, err = a.client.GetUserGroups(ctx, a.token.AccessToken, "main", *user.ID, params)
 	if err != nil {
 		return nil, err
 	}
@@ -192,7 +265,8 @@ func (a *App) setRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if request already done
-	if _, ok := cu.Attributes["request"]; ok {
+	attr := *cu.Attributes
+	if _, ok := attr["request"]; ok {
 		httputil.RespondWithError(w, http.StatusBadRequest, "Request Already Done")
 		return
 	}
@@ -206,19 +280,22 @@ func (a *App) setRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Set request attributes to requested user
-	if ru.Attributes == nil {
-		ru.Attributes = map[string][]string{}
-		ru.Attributes["locale"] = []string{"en"}
+	attr = *ru.Attributes
+	if attr == nil {
+		attr = map[string][]string{}
+		attr["locale"] = []string{"en"}
 	}
-	if _, ok := ru.Attributes["pending"]; ok {
+	if _, ok := attr["pending"]; ok {
 		//val = append(val, *cu.Email)
 		//ru.Attributes["pending"] = val
 		httputil.RespondWithError(w, http.StatusBadRequest, "Pending Already Done")
 		return
 	} else {
-		ru.Attributes["pending"] = []string{*cu.Email}
+		attr["pending"] = []string{*cu.Email}
 	}
-	err = a.client.UpdateUser(a.token.AccessToken, "main", *ru)
+
+	ctx := context.Background()
+	err = a.client.UpdateUser(ctx, a.token.AccessToken, "main", *ru)
 	if err != nil {
 		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 		return
@@ -226,13 +303,14 @@ func (a *App) setRequest(w http.ResponseWriter, r *http.Request) {
 
 	// Set request attributes to current user
 	timestamp := int(time.Now().UnixNano() / int64(time.Millisecond))
-	if cu.Attributes == nil {
-		cu.Attributes = map[string][]string{}
-		cu.Attributes["locale"] = []string{"en"}
+	attr = *cu.Attributes
+	if attr == nil {
+		attr = map[string][]string{}
+		attr["locale"] = []string{"en"}
 	}
-	cu.Attributes["request"] = []string{email}
-	cu.Attributes["timestamp"] = []string{strconv.Itoa(timestamp)}
-	err = a.client.UpdateUser(a.token.AccessToken, "main", *cu)
+	attr["request"] = []string{email}
+	attr["timestamp"] = []string{strconv.Itoa(timestamp)}
+	err = a.client.UpdateUser(ctx, a.token.AccessToken, "main", *cu)
 	if err != nil {
 		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 		return
@@ -253,7 +331,9 @@ func (a *App) setPendingByMail(w http.ResponseWriter, r *http.Request) {
 
 	// Get User Groups
 	var groups []*gocloak.UserGroup
-	groups, err = a.client.GetUserGroups(a.token.AccessToken, "main", *cu.ID)
+	params := gocloak.GetGroupsParams{}
+	ctx := context.Background()
+	groups, err = a.client.GetUserGroups(ctx, a.token.AccessToken, "main", *cu.ID, params)
 	if err != nil {
 		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 		return
@@ -266,13 +346,13 @@ func (a *App) setPendingByMail(w http.ResponseWriter, r *http.Request) {
 			if *g.ID == NewUsers {
 
 				// Move from new users to pending
-				err = a.client.DeleteUserFromGroup(a.token.AccessToken, "main", *cu.ID, NewUsers)
+				err = a.client.DeleteUserFromGroup(ctx, a.token.AccessToken, "main", *cu.ID, NewUsers)
 				if err != nil {
 					httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 					return
 				}
 
-				err = a.client.AddUserToGroup(a.token.AccessToken, "main", *cu.ID, GalaxyPending)
+				err = a.client.AddUserToGroup(ctx, a.token.AccessToken, "main", *cu.ID, GalaxyPending)
 				if err != nil {
 					httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 					return
@@ -301,7 +381,9 @@ func (a *App) setPending(w http.ResponseWriter, r *http.Request) {
 
 	// Get User Groups
 	var groups []*gocloak.UserGroup
-	groups, err = a.client.GetUserGroups(a.token.AccessToken, "main", *cu.ID)
+	params := gocloak.GetGroupsParams{}
+	ctx := context.Background()
+	groups, err = a.client.GetUserGroups(ctx, a.token.AccessToken, "main", *cu.ID, params)
 	if err != nil {
 		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 		return
@@ -314,13 +396,13 @@ func (a *App) setPending(w http.ResponseWriter, r *http.Request) {
 			if *g.ID == NewUsers {
 
 				// Move from new users to pending
-				err = a.client.DeleteUserFromGroup(a.token.AccessToken, "main", *cu.ID, NewUsers)
+				err = a.client.DeleteUserFromGroup(ctx, a.token.AccessToken, "main", *cu.ID, NewUsers)
 				if err != nil {
 					httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 					return
 				}
 
-				err = a.client.AddUserToGroup(a.token.AccessToken, "main", *cu.ID, GalaxyPending)
+				err = a.client.AddUserToGroup(ctx, a.token.AccessToken, "main", *cu.ID, GalaxyPending)
 				if err != nil {
 					httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 					return
@@ -371,7 +453,9 @@ func (a *App) verifyUser(w http.ResponseWriter, r *http.Request) {
 
 	// Get Pending User Groups
 	var groups []*gocloak.UserGroup
-	groups, err = a.client.GetUserGroups(a.token.AccessToken, "main", *pu.ID)
+	params := gocloak.GetGroupsParams{}
+	ctx := context.Background()
+	groups, err = a.client.GetUserGroups(ctx, a.token.AccessToken, "main", *pu.ID, params)
 	if err != nil {
 		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 		return
@@ -384,13 +468,13 @@ func (a *App) verifyUser(w http.ResponseWriter, r *http.Request) {
 			if *g.ID == "c46f3890-fa01-4933-968d-488ba5ca3153" {
 
 				// Change pending User group
-				err = a.client.DeleteUserFromGroup(a.token.AccessToken, "main", *pu.ID, "c46f3890-fa01-4933-968d-488ba5ca3153")
+				err = a.client.DeleteUserFromGroup(ctx, a.token.AccessToken, "main", *pu.ID, "c46f3890-fa01-4933-968d-488ba5ca3153")
 				if err != nil {
 					httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 					return
 				}
 
-				err = a.client.AddUserToGroup(a.token.AccessToken, "main", *pu.ID, "04778f5d-31c1-4a2d-a395-7eac07ebc5b7")
+				err = a.client.AddUserToGroup(ctx, a.token.AccessToken, "main", *pu.ID, "04778f5d-31c1-4a2d-a395-7eac07ebc5b7")
 				if err != nil {
 					httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 					return
@@ -423,38 +507,42 @@ func (a *App) setVerify(action string, email string, pu *gocloak.User, r *http.R
 		return err
 	}
 
+	ctx := context.Background()
 	// Set approved to current user attribute
 	if action == "approve" {
-		if cu.Attributes == nil {
-			cu.Attributes = map[string][]string{}
-			cu.Attributes["locale"] = []string{"en"}
+		attr := *cu.Attributes
+		if attr == nil {
+			attr = map[string][]string{}
+			attr["locale"] = []string{"en"}
 		}
-		if val, ok := cu.Attributes["approved"]; ok {
+		if val, ok := attr["approved"]; ok {
 			val = append(val, email)
-			cu.Attributes["approved"] = val
+			attr["approved"] = val
 		} else {
-			cu.Attributes["approved"] = []string{email}
+			attr["approved"] = []string{email}
 
 			// Add to verify group
-			err = a.client.AddUserToGroup(a.token.AccessToken, "main", *cu.ID, "96a32920-5f34-4678-b8e3-ea26f4143558")
+			err = a.client.AddUserToGroup(ctx, a.token.AccessToken, "main", *cu.ID, "96a32920-5f34-4678-b8e3-ea26f4143558")
 			if err != nil {
 				return err
 			}
 		}
 
 		// Remove request attribute from pending user
-		if _, ok := pu.Attributes["request"]; ok {
-			delete(pu.Attributes, "request")
-			delete(pu.Attributes, "timestamp")
+		attr = *pu.Attributes
+		if _, ok := attr["request"]; ok {
+			delete(attr, "request")
+			delete(attr, "timestamp")
 		}
 	}
 
 	// Remove pending attribute from current user
-	if cu.Attributes == nil {
-		cu.Attributes = map[string][]string{}
-		cu.Attributes["locale"] = []string{"en"}
+	attr := *cu.Attributes
+	if attr == nil {
+		attr = map[string][]string{}
+		attr["locale"] = []string{"en"}
 	}
-	if val, ok := cu.Attributes["pending"]; ok {
+	if val, ok := attr["pending"]; ok {
 		if len(val) > 1 {
 			for i, v := range val {
 				if v == email {
@@ -462,29 +550,29 @@ func (a *App) setVerify(action string, email string, pu *gocloak.User, r *http.R
 					break
 				}
 			}
-			cu.Attributes["pending"] = val
+			attr["pending"] = val
 		} else {
-			delete(cu.Attributes, "pending")
+			delete(attr, "pending")
 		}
 	}
-	err = a.client.UpdateUser(a.token.AccessToken, "main", *cu)
+	err = a.client.UpdateUser(ctx, a.token.AccessToken, "main", *cu)
 	if err != nil {
 		return err
 	}
 
 	if action == "ignore" {
 		// Add User to banned and ignored groups
-		err := a.client.DeleteUserFromGroup(a.token.AccessToken, "main", *pu.ID, "c46f3890-fa01-4933-968d-488ba5ca3153")
+		err = a.client.DeleteUserFromGroup(ctx, a.token.AccessToken, "main", *pu.ID, "c46f3890-fa01-4933-968d-488ba5ca3153")
 		if err != nil {
 			return err
 		}
 
-		err = a.client.AddUserToGroup(a.token.AccessToken, "main", *pu.ID, "c4569eaa-c67d-446e-b370-ad426a006c6b")
+		err = a.client.AddUserToGroup(ctx, a.token.AccessToken, "main", *pu.ID, "c4569eaa-c67d-446e-b370-ad426a006c6b")
 		if err != nil {
 			return err
 		}
 
-		err = a.client.AddUserToGroup(a.token.AccessToken, "main", *pu.ID, "4111c55c-1931-4ca1-9f6f-127963d40dcd")
+		err = a.client.AddUserToGroup(ctx, a.token.AccessToken, "main", *pu.ID, "4111c55c-1931-4ca1-9f6f-127963d40dcd")
 		if err != nil {
 			return err
 		}
@@ -492,7 +580,7 @@ func (a *App) setVerify(action string, email string, pu *gocloak.User, r *http.R
 		*pu.Enabled = false
 	}
 
-	err = a.client.UpdateUser(a.token.AccessToken, "main", *pu)
+	err = a.client.UpdateUser(ctx, a.token.AccessToken, "main", *pu)
 	if err != nil {
 		return err
 	}
@@ -503,6 +591,7 @@ func (a *App) setVerify(action string, email string, pu *gocloak.User, r *http.R
 func (a *App) approveUserByID(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
+	ctx := context.Background()
 
 	// Check role
 	authAdmin := checkRole("auth_admin", r)
@@ -513,21 +602,22 @@ func (a *App) approveUserByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get User groups
-	groups, err := a.client.GetUserGroups(a.token.AccessToken, "main", id)
+	params := gocloak.GetGroupsParams{}
+	groups, err := a.client.GetUserGroups(ctx, a.token.AccessToken, "main", id, params)
 	if err != nil {
 		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 		return
 	}
 
 	for _, v := range groups {
-		err := a.client.DeleteUserFromGroup(a.token.AccessToken, "main", id, *v.ID)
+		err := a.client.DeleteUserFromGroup(ctx, a.token.AccessToken, "main", id, *v.ID)
 		if err != nil {
 			httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 			return
 		}
 	}
 
-	err = a.client.AddUserToGroup(a.token.AccessToken, "main", id, "04778f5d-31c1-4a2d-a395-7eac07ebc5b7")
+	err = a.client.AddUserToGroup(ctx, a.token.AccessToken, "main", id, "04778f5d-31c1-4a2d-a395-7eac07ebc5b7")
 	if err != nil {
 		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 		return
@@ -539,13 +629,14 @@ func (a *App) approveUserByID(w http.ResponseWriter, r *http.Request) {
 func (a *App) changeStatus(w http.ResponseWriter, r *http.Request) {
 
 	groupId := r.FormValue("group_id")
+	ctx := context.Background()
 
 	//Allow only these groups in option
 	if groupId == GalaxyGuests || groupId == GalaxyPending || groupId == BannedUsers || groupId == GalaxyUsers {
 
 		// Get Pending User by ID
 		userId := r.FormValue("user_id")
-		pu, err := a.client.GetUserByID(a.token.AccessToken, "main", userId)
+		pu, err := a.client.GetUserByID(ctx, a.token.AccessToken, "main", userId)
 		if err != nil {
 			httputil.RespondWithJSON(w, http.StatusNotFound, err)
 			return
@@ -553,7 +644,8 @@ func (a *App) changeStatus(w http.ResponseWriter, r *http.Request) {
 
 		// Get User Groups
 		var groups []*gocloak.UserGroup
-		groups, err = a.client.GetUserGroups(a.token.AccessToken, "main", *pu.ID)
+		params := gocloak.GetGroupsParams{}
+		groups, err = a.client.GetUserGroups(ctx, a.token.AccessToken, "main", *pu.ID, params)
 		if err != nil {
 			httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 			return
@@ -573,7 +665,7 @@ func (a *App) changeStatus(w http.ResponseWriter, r *http.Request) {
 			// Remove user from pending or guests groups
 			for _, v := range groups {
 				if *v.ID == GalaxyPending || *v.ID == GalaxyGuests {
-					err := a.client.DeleteUserFromGroup(a.token.AccessToken, "main", userId, *v.ID)
+					err := a.client.DeleteUserFromGroup(ctx, a.token.AccessToken, "main", userId, *v.ID)
 					if err != nil {
 						httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 						return
@@ -582,7 +674,7 @@ func (a *App) changeStatus(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// Add to requested group
-			err = a.client.AddUserToGroup(a.token.AccessToken, "main", *pu.ID, groupId)
+			err = a.client.AddUserToGroup(ctx, a.token.AccessToken, "main", *pu.ID, groupId)
 			if err != nil {
 				httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 				return
@@ -591,7 +683,7 @@ func (a *App) changeStatus(w http.ResponseWriter, r *http.Request) {
 			// Disable banned user
 			if groupId == BannedUsers {
 				*pu.Enabled = false
-				err = a.client.UpdateUser(a.token.AccessToken, "main", *pu)
+				err = a.client.UpdateUser(ctx, a.token.AccessToken, "main", *pu)
 				if err != nil {
 					httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 					return
@@ -618,6 +710,7 @@ func (a *App) changeStatus(w http.ResponseWriter, r *http.Request) {
 func (a *App) removeUser(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
+	ctx := context.Background()
 
 	// Check role
 	authRoot := checkRole("auth_root", r)
@@ -627,7 +720,7 @@ func (a *App) removeUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := a.client.DeleteUser(a.token.AccessToken, "main", id)
+	err := a.client.DeleteUser(ctx, a.token.AccessToken, "main", id)
 	if err != nil {
 		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 		return
@@ -645,9 +738,10 @@ func (a *App) cleanUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ctx := context.Background()
 	max := 10000
 	params := gocloak.GetGroupsParams{Max: &max}
-	users, err := a.client.GetGroupMembers(a.token.AccessToken, "main", "c46f3890-fa01-4933-968d-488ba5ca3153", params)
+	users, err := a.client.GetGroupMembers(ctx, a.token.AccessToken, "main", "c46f3890-fa01-4933-968d-488ba5ca3153", params)
 	if err != nil {
 		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 		return
@@ -658,13 +752,14 @@ func (a *App) cleanUsers(w http.ResponseWriter, r *http.Request) {
 		curtime := int(time.Now().UnixNano() / int64(time.Millisecond))
 		for _, u := range users {
 			// Remove request attribute within 14 days
-			if _, ok := u.Attributes["request"]; ok {
-				if val, ok := u.Attributes["timestamp"]; ok {
+			attr := *u.Attributes
+			if _, req := attr["request"]; req {
+				if val, tim := attr["timestamp"]; tim {
 					reqtime, _ := strconv.Atoi(val[0])
 					if (curtime - reqtime) > 14*24*3600*1000 {
-						delete(u.Attributes, "request")
-						delete(u.Attributes, "timestamp")
-						err = a.client.UpdateUser(a.token.AccessToken, "main", *u)
+						delete(attr, "request")
+						delete(attr, "timestamp")
+						err = a.client.UpdateUser(ctx, a.token.AccessToken, "main", *u)
 						if err != nil {
 							httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 							return
@@ -675,7 +770,7 @@ func (a *App) cleanUsers(w http.ResponseWriter, r *http.Request) {
 
 			// Remove users with not verified mail within 7 days
 			if *u.EmailVerified == false && (timenow-*u.CreatedTimestamp) > 7*24*3600*1000 {
-				err := a.client.DeleteUser(a.token.AccessToken, "main", *u.ID)
+				err = a.client.DeleteUser(ctx, a.token.AccessToken, "main", *u.ID)
 				if err != nil {
 					httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 					return
