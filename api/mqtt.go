@@ -92,13 +92,12 @@ func (l *MQTTListener) init() error {
 
 	l.connected = true
 
-	l.client.Router.RegisterHandler("galaxy/service/#", l.OnMessage)
-
 	sa, err := l.client.Subscribe(context.Background(), &paho.Subscribe{
 		Subscriptions: map[string]paho.SubscribeOptions{
-			"galaxy/service/#": {QoS: byte(2)},
+			"auth/service": {QoS: byte(2), NoLocal: true},
 		},
 	})
+
 	if err != nil {
 		return pkgerr.Wrap(err, "client.Subscribe")
 	}
@@ -106,7 +105,12 @@ func (l *MQTTListener) init() error {
 		return pkgerr.Errorf("MQTT subscribe error: %d ", sa.Reasons[0])
 	}
 
-	l.SendMessage()
+	l.client.Router.RegisterHandler("auth/service", l.OnMessage)
+
+	err = l.SendMessage(`{"message":"test"}`)
+	if err != nil {
+		return pkgerr.Wrap(err, "client.Publish")
+	}
 
 	return nil
 }
@@ -121,27 +125,28 @@ func (l *MQTTListener) Close() error {
 func (l *MQTTListener) OnMessage(p *paho.Publish) {
 	log.Info().Str("payload", p.String()).Msg("MQTT OnMessage")
 	if err := HandleMessage(string(p.Payload)); err != nil {
-		log.Error().Err(err).Msg("service protocol error")
+		log.Error().Err(err).Msg("OnMessage error")
 	}
 }
 
-func (l *MQTTListener) SendMessage() {
+func (l *MQTTListener) SendMessage(msg string) error {
 
-	pub := &paho.Publish{
+	pa, err := l.client.Publish(context.Background(), &paho.Publish{
 		QoS:        byte(2),
 		Retain:     false,
-		Topic:      "galaxy/service/shidur",
+		Topic:      "auth/service",
 		Properties: &paho.PublishProperties{},
-		Payload:    []byte(`{"message":"test"}`),
-	}
+		Payload:    []byte(msg),
+	})
 
-	pa, err := l.client.Publish(context.Background(), pub)
 	if err != nil {
-		pkgerr.Wrap(err, "client.Publish")
+		return pkgerr.Wrap(err, "client.Publish")
 	}
 	if pa.ReasonCode != 0 {
-		pkgerr.Errorf("MQTT Publish error: %d - %s", pa.ReasonCode, pa.Properties.ReasonString)
+		return pkgerr.Errorf("MQTT Publish error: %d - %s", pa.ReasonCode, pa.Properties.ReasonString)
 	}
+
+	return nil
 }
 
 //type PahoLogAdapter struct {
