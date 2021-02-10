@@ -8,6 +8,7 @@ import (
 	"math"
 	"net"
 	"os"
+	"time"
 
 	"github.com/eclipse/paho.golang/paho"
 	pkgerr "github.com/pkg/errors"
@@ -16,20 +17,25 @@ import (
 )
 
 type MQTTListener struct {
-	client *paho.Client
+	client    *paho.Client
+	connected bool
 }
 
 func NewMQTTListener() *MQTTListener {
-	return &MQTTListener{}
+	return &MQTTListener{connected: false}
 }
 
 func (l *MQTTListener) Start() error {
 	l.client = paho.NewClient(paho.ClientConfig{
 		ClientID: "go_client_id",
 		OnConnectionLost: func(err error) {
+			l.connected = false
 			log.Warn().Msgf("MQTT OnConnectionLost: %+v", err)
-			if err := l.init(); err != nil {
-				log.Error().Err(err).Msg("error initializing mqtt on connection lost")
+			for !l.connected {
+				time.Sleep(10 * time.Second)
+				if err = l.init(); err != nil {
+					log.Error().Err(err).Msg("error initializing mqtt on connection lost")
+				}
 			}
 		},
 	})
@@ -46,7 +52,7 @@ func (l *MQTTListener) init() error {
 
 	var conn net.Conn
 	var err error
-	if os.Getenv("MQTT_SSL") == "true" {
+	if os.Getenv("MQTT_SSL") == "" {
 		conn, err = tls.Dial("tcp", os.Getenv("MQTT_URL"), nil)
 	} else {
 		conn, err = net.Dial("tcp", os.Getenv("MQTT_URL"))
@@ -84,6 +90,8 @@ func (l *MQTTListener) init() error {
 	if ca.ReasonCode != 0 {
 		return pkgerr.Errorf("MQTT connect error: %d - %s", ca.ReasonCode, ca.Properties.ReasonString)
 	}
+
+	l.connected = true
 
 	l.client.Router.RegisterHandler("galaxy/service/#", l.HandleServiceProtocol)
 
