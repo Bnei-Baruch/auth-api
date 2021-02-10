@@ -4,15 +4,12 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"fmt"
-	"math"
 	"net"
 	"os"
 	"time"
 
 	"github.com/eclipse/paho.golang/paho"
 	pkgerr "github.com/pkg/errors"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -39,11 +36,13 @@ func (l *MQTTListener) Start() error {
 			}
 		},
 	})
-	l.client.SetErrorLogger(NewPahoLogAdapter(zerolog.ErrorLevel))
-	debugLog := NewPahoLogAdapter(zerolog.InfoLevel)
-	l.client.SetDebugLogger(debugLog)
-	l.client.PingHandler.SetDebug(debugLog)
-	l.client.Router.SetDebug(debugLog)
+
+	//l.client.SetErrorLogger(NewPahoLogAdapter(zerolog.ErrorLevel))
+	//debugLog := NewPahoLogAdapter(zerolog.InfoLevel)
+	//l.client.SetDebugLogger(debugLog)
+	//l.client.PingHandler.SetDebug(debugLog)
+	//l.client.Router.SetDebug(debugLog)
+
 	return l.init()
 }
 
@@ -52,7 +51,7 @@ func (l *MQTTListener) init() error {
 
 	var conn net.Conn
 	var err error
-	if os.Getenv("MQTT_SSL") == "" {
+	if os.Getenv("MQTT_SSL") == "true" {
 		conn, err = tls.Dial("tcp", os.Getenv("MQTT_URL"), nil)
 	} else {
 		conn, err = net.Dial("tcp", os.Getenv("MQTT_URL"))
@@ -63,7 +62,7 @@ func (l *MQTTListener) init() error {
 
 	l.client.Conn = conn
 
-	var sessionExpiryInterval = uint32(math.MaxUint32)
+	var sessionExpiryInterval = uint32(5)
 
 	cp := &paho.Connect{
 		ClientID:   "auth_api_client",
@@ -93,7 +92,7 @@ func (l *MQTTListener) init() error {
 
 	l.connected = true
 
-	l.client.Router.RegisterHandler("galaxy/service/#", l.HandleServiceProtocol)
+	l.client.Router.RegisterHandler("galaxy/service/#", l.OnMessage)
 
 	sa, err := l.client.Subscribe(context.Background(), &paho.Subscribe{
 		Subscriptions: map[string]paho.SubscribeOptions{
@@ -107,6 +106,8 @@ func (l *MQTTListener) init() error {
 		return pkgerr.Errorf("MQTT subscribe error: %d ", sa.Reasons[0])
 	}
 
+	l.SendMessage()
+
 	return nil
 }
 
@@ -117,28 +118,47 @@ func (l *MQTTListener) Close() error {
 	return nil
 }
 
-func (l *MQTTListener) HandleServiceProtocol(p *paho.Publish) {
-	log.Info().Str("payload", p.String()).Msg("MQTT handle service protocol")
+func (l *MQTTListener) OnMessage(p *paho.Publish) {
+	log.Info().Str("payload", p.String()).Msg("MQTT OnMessage")
 	if err := HandleMessage(string(p.Payload)); err != nil {
 		log.Error().Err(err).Msg("service protocol error")
 	}
 }
 
-type PahoLogAdapter struct {
-	level zerolog.Level
+func (l *MQTTListener) SendMessage() {
+
+	pub := &paho.Publish{
+		QoS:        byte(2),
+		Retain:     false,
+		Topic:      "galaxy/service/shidur",
+		Properties: &paho.PublishProperties{},
+		Payload:    []byte(`{"message":"test"}`),
+	}
+
+	pa, err := l.client.Publish(context.Background(), pub)
+	if err != nil {
+		pkgerr.Wrap(err, "client.Publish")
+	}
+	if pa.ReasonCode != 0 {
+		pkgerr.Errorf("MQTT Publish error: %d - %s", pa.ReasonCode, pa.Properties.ReasonString)
+	}
 }
 
-func NewPahoLogAdapter(level zerolog.Level) *PahoLogAdapter {
-	return &PahoLogAdapter{level: level}
-}
-
-func (a *PahoLogAdapter) Println(v ...interface{}) {
-	log.WithLevel(a.level).Msgf("mqtt: %s", fmt.Sprint(v...))
-}
-
-func (a *PahoLogAdapter) Printf(format string, v ...interface{}) {
-	log.WithLevel(a.level).Msgf("mqtt: %s", fmt.Sprintf(format, v...))
-}
+//type PahoLogAdapter struct {
+//	level zerolog.Level
+//}
+//
+//func NewPahoLogAdapter(level zerolog.Level) *PahoLogAdapter {
+//	return &PahoLogAdapter{level: level}
+//}
+//
+//func (a *PahoLogAdapter) Println(v ...interface{}) {
+//	log.WithLevel(a.level).Msgf("mqtt: %s", fmt.Sprint(v...))
+//}
+//
+//func (a *PahoLogAdapter) Printf(format string, v ...interface{}) {
+//	log.WithLevel(a.level).Msgf("mqtt: %s", fmt.Sprintf(format, v...))
+//}
 
 func HandleMessage(payload string) error {
 	var pMsg map[string]interface{}
