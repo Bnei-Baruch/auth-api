@@ -117,7 +117,7 @@ func (a *App) initializeRoutes() {
 func (a *App) initMQTT() {
 	if os.Getenv("MQTT_URL") != "" {
 		a.mqttListener = NewMQTTListener()
-		if err := a.mqttListener.Start(); err != nil {
+		if err := a.mqttListener.init(); err != nil {
 			log.Fatal().Err(err).Msg("initialize mqtt listener")
 		}
 	}
