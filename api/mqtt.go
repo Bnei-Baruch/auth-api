@@ -3,60 +3,69 @@ package api
 import (
 	"fmt"
 	"github.com/eclipse/paho.mqtt.golang"
-	"os"
+	"strings"
 )
 
-type MQTTListener struct {
-	client mqtt.Client
-}
-
-func NewMQTTListener() *MQTTListener {
-	return &MQTTListener{}
-}
-
-func (l *MQTTListener) init() error {
-	server := os.Getenv("MQTT_URL")
-	username := os.Getenv("MQTT_USER")
-	password := os.Getenv("MQTT_PASS")
-
-	opts := mqtt.NewClientOptions()
-	opts.AddBroker(fmt.Sprintf("ssl://%s", server))
-	opts.SetClientID("auth_mqtt_client")
-	opts.SetUsername(username)
-	opts.SetPassword(password)
-	opts.SetDefaultPublishHandler(messagePubHandler)
-	opts.OnConnect = connectHandler
-	opts.OnConnectionLost = connectLostHandler
-	l.client = mqtt.NewClient(opts)
-	if token := l.client.Connect(); token.Wait() && token.Error() != nil {
-		return token.Error()
+func (a *App) SubMQTT(c mqtt.Client) {
+	fmt.Println("- Connected to MQTT -")
+	if token := a.Msg.Subscribe("auth/service/#", byte(1), a.MsgHandler); token.Wait() && token.Error() != nil {
+		fmt.Printf("MQTT Subscription error: %s\n", token.Error())
+	} else {
+		fmt.Printf("%s\n", "MQTT Subscription: auth/service/#")
 	}
-	return nil
 }
 
-var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
-	fmt.Printf("Received message: %s from topic: %s\n", msg.Payload(), msg.Topic())
+func (a *App) LostMQTT(c mqtt.Client, e error) {
+	fmt.Printf("MQTT Connection Error: %s\n", e)
 }
 
-var connectHandler mqtt.OnConnectHandler = func(client mqtt.Client) {
-	fmt.Println("Connected")
-	sub(client)
-	publish(client)
+func (a *App) MsgHandler(c mqtt.Client, m mqtt.Message) {
+	//fmt.Printf("Received message: %s from topic: %s\n", m.Payload(), m.Topic())
+	id := "false"
+	s := strings.Split(m.Topic(), "/")
+	p := string(m.Payload())
+
+	if s[0] == "kli" && len(s) == 5 {
+		id = s[4]
+	} else if s[0] == "exec" && len(s) == 4 {
+		id = s[3]
+	}
+
+	if id == "false" {
+		//switch p {
+		//case "start":
+		//	go a.startExecMqtt(ep)
+		//case "stop":
+		//	go a.stopExecMqtt(ep)
+		//case "status":
+		//	go a.execStatusMqtt(ep)
+		//}
+	}
+
+	if id != "false" {
+		//switch p {
+		//case "start":
+		//	go a.startExecMqttByID(ep, id)
+		//case "stop":
+		//	go a.stopExecMqttByID(ep, id)
+		//case "status":
+		//	go a.execStatusMqttByID(ep, id)
+		//case "cmdstat":
+		//	go a.cmdStatMqtt(ep, id)
+		//case "progress":
+		//	go a.getProgressMqtt(ep, id)
+		//case "report":
+		//	go a.getReportMqtt(ep, id)
+		//case "alive":
+		//	go a.isAliveMqtt(ep, id)
+		//}
+	}
 }
 
-var connectLostHandler mqtt.ConnectionLostHandler = func(client mqtt.Client, err error) {
-	fmt.Printf("Connect lost: %v", err)
-}
-
-func publish(client mqtt.Client) {
-	text := fmt.Sprintf(`{"message":"test"}`)
-	token := client.Publish("galaxy/service/shidur", 2, false, text)
-	token.Wait()
-}
-
-func sub(client mqtt.Client) {
-	topic := "galaxy/service/#"
-	token := client.Subscribe(topic, 2, nil)
-	token.Wait()
-	fmt.Printf("Subscribed to topic: %s", topic)
+func (a *App) Publish(topic string, message string) {
+	text := fmt.Sprintf(message)
+	//a.Msg.Publish(topic, byte(1), false, text)
+	if token := a.Msg.Publish(topic, byte(1), false, text); token.Wait() && token.Error() != nil {
+		fmt.Printf("Publish message error: %s\n", token.Error())
+	}
 }

@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"fmt"
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"net/http"
 	"os"
 
@@ -20,21 +22,21 @@ type App struct {
 	tokenVerifier *oidc.IDTokenVerifier
 	client        gocloak.GoCloak
 	token         *gocloak.JWT
-	mqttListener  *MQTTListener
+	Msg           mqtt.Client
 }
 
 func (a *App) Initialize(authUrl string, accountsUrl string, skipAuth bool, clientID string, clientSecret string) {
 	log.Info().Msg("initializing app")
 
-	a.InitializeWithDB(accountsUrl, skipAuth)
+	a.InitApp(accountsUrl, skipAuth)
 	a.initAuthClient(authUrl, clientID, clientSecret)
 }
 
-func (a *App) InitializeWithDB(accountsUrl string, skipAuth bool) {
+func (a *App) InitApp(accountsUrl string, skipAuth bool) {
 
-	a.initMQTT()
 	a.Router = mux.NewRouter()
 	a.initializeRoutes()
+	a.initMQTT()
 
 	if !skipAuth {
 		a.initOidc(accountsUrl)
@@ -117,8 +119,21 @@ func (a *App) initializeRoutes() {
 
 func (a *App) initMQTT() {
 	if os.Getenv("MQTT_URL") != "" {
-		a.mqttListener = NewMQTTListener()
-		if err := a.mqttListener.init(); err != nil {
+		server := os.Getenv("MQTT_URL")
+		username := os.Getenv("MQTT_USER")
+		password := os.Getenv("MQTT_PASS")
+
+		opts := mqtt.NewClientOptions()
+		opts.AddBroker(fmt.Sprintf("ssl://%s", server))
+		opts.SetClientID("auth_mqtt_client")
+		opts.SetUsername(username)
+		opts.SetPassword(password)
+		opts.SetAutoReconnect(true)
+		opts.SetOnConnectHandler(a.SubMQTT)
+		opts.SetConnectionLostHandler(a.LostMQTT)
+		a.Msg = mqtt.NewClient(opts)
+		if token := a.Msg.Connect(); token.Wait() && token.Error() != nil {
+			err := token.Error()
 			log.Fatal().Err(err).Msg("initialize mqtt listener")
 		}
 	}
