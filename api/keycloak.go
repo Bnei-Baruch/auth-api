@@ -166,7 +166,7 @@ func (a *App) findUser(w http.ResponseWriter, r *http.Request) {
 	httputil.RespondWithJSON(w, http.StatusOK, uapi)
 }
 
-func (a *App) searchUsers(w http.ResponseWriter, r *http.Request) {
+func (a *App) searchGroupUsers(w http.ResponseWriter, r *http.Request) {
 	// Check role
 	//authAdmin := checkRole("auth_admin", r)
 	//if !authAdmin {
