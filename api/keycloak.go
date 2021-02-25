@@ -96,8 +96,19 @@ func (a *App) getMyInfo(w http.ResponseWriter, r *http.Request) {
 func (a *App) getGroupUsers(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
-	max := 10000
-	params := gocloak.GetGroupsParams{Max: &max}
+
+	first, err := strconv.Atoi(r.FormValue("first"))
+	if err != nil {
+		first = 0
+	}
+	max, err := strconv.Atoi(r.FormValue("max"))
+	if err != nil {
+		max = 15
+	}
+	search := r.FormValue("search")
+	br := true
+
+	params := gocloak.GetGroupsParams{Max: &max, First: &first, Search: &search, BriefRepresentation: &br}
 	ctx := context.Background()
 	g, err := a.client.GetGroupMembers(ctx, a.token.AccessToken, "main", id, params)
 	if err != nil {
@@ -166,7 +177,7 @@ func (a *App) findUser(w http.ResponseWriter, r *http.Request) {
 	httputil.RespondWithJSON(w, http.StatusOK, uapi)
 }
 
-func (a *App) searchGroupUsers(w http.ResponseWriter, r *http.Request) {
+func (a *App) searchUsers(w http.ResponseWriter, r *http.Request) {
 	// Check role
 	//authAdmin := checkRole("auth_admin", r)
 	//if !authAdmin {
@@ -174,9 +185,6 @@ func (a *App) searchGroupUsers(w http.ResponseWriter, r *http.Request) {
 	//	httputil.NewUnauthorizedError(e).Abort(w, r)
 	//	return
 	//}
-
-	vars := mux.Vars(r)
-	id := vars["id"]
 
 	first, err := strconv.Atoi(r.FormValue("first"))
 	if err != nil {
@@ -187,10 +195,11 @@ func (a *App) searchGroupUsers(w http.ResponseWriter, r *http.Request) {
 		max = 15
 	}
 	search := r.FormValue("search")
+	br := true
 
-	params := gocloak.GetGroupsParams{Max: &max, First: &first, Search: &search}
+	params := gocloak.GetUsersParams{Max: &max, First: &first, Search: &search, BriefRepresentation: &br}
 	ctx := context.Background()
-	g, err := a.client.GetGroupMembers(ctx, a.token.AccessToken, "main", id, params)
+	g, err := a.client.GetUsers(ctx, a.token.AccessToken, "main", params)
 	if err != nil {
 		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 		return
