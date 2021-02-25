@@ -23,7 +23,7 @@ func (a *App) MsgHandler(c mqtt.Client, m mqtt.Message) {
 	//fmt.Printf("Received message: %s from topic: %s\n", m.Payload(), m.Topic())
 	id := "false"
 	s := strings.Split(m.Topic(), "/")
-	p := string(m.Payload())
+	//p := string(m.Payload())
 
 	if s[0] == "kli" && len(s) == 5 {
 		id = s[4]

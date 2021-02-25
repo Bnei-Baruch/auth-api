@@ -108,7 +108,7 @@ func (a *App) getGroupUsers(w http.ResponseWriter, r *http.Request) {
 	httputil.RespondWithJSON(w, http.StatusOK, g)
 }
 
-func (a *App) searchUser(w http.ResponseWriter, r *http.Request) {
+func (a *App) findUser(w http.ResponseWriter, r *http.Request) {
 	// Check role
 	authAdmin := checkRole("auth_admin", r)
 	if !authAdmin {
@@ -164,6 +164,39 @@ func (a *App) searchUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httputil.RespondWithJSON(w, http.StatusOK, uapi)
+}
+
+func (a *App) searchUsers(w http.ResponseWriter, r *http.Request) {
+	// Check role
+	//authAdmin := checkRole("auth_admin", r)
+	//if !authAdmin {
+	//	e := errors.New("bad permission")
+	//	httputil.NewUnauthorizedError(e).Abort(w, r)
+	//	return
+	//}
+
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	first, err := strconv.Atoi(r.FormValue("first"))
+	if err != nil {
+		first = 0
+	}
+	max, err := strconv.Atoi(r.FormValue("max"))
+	if err != nil {
+		max = 15
+	}
+	search := r.FormValue("search")
+
+	params := gocloak.GetGroupsParams{Max: &max, First: &first, Search: &search}
+	ctx := context.Background()
+	g, err := a.client.GetGroupMembers(ctx, a.token.AccessToken, "main", id, params)
+	if err != nil {
+		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+		return
+	}
+
+	httputil.RespondWithJSON(w, http.StatusOK, g)
 }
 
 func (a *App) getUserByID(id string) (*gocloak.User, error) {
