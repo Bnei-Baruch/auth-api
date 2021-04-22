@@ -23,17 +23,18 @@ const (
 )
 
 type UserAPI struct {
-	ID               *string                                    `json:"id,omitempty"`
-	CreatedTimestamp *int64                                     `json:"createdTimestamp,omitempty"`
-	Username         *string                                    `json:"username,omitempty"`
-	Enabled          *bool                                      `json:"enabled,omitempty"`
-	EmailVerified    *bool                                      `json:"emailVerified,omitempty"`
-	FirstName        *string                                    `json:"firstName,omitempty"`
-	LastName         *string                                    `json:"lastName,omitempty"`
-	Email            *string                                    `json:"email,omitempty"`
-	Attributes       *map[string][]string                       `json:"attributes,omitempty"`
-	Social           []*gocloak.FederatedIdentityRepresentation `json:"social,omitempty"`
-	Groups           []*gocloak.UserGroup                       `json:"groups,omitempty"`
+	//ID               *string                                    `json:"id,omitempty"`
+	//CreatedTimestamp *int64                                     `json:"createdTimestamp,omitempty"`
+	//Username         *string                                    `json:"username,omitempty"`
+	//Enabled          *bool                                      `json:"enabled,omitempty"`
+	//EmailVerified    *bool                                      `json:"emailVerified,omitempty"`
+	//FirstName        *string                                    `json:"firstName,omitempty"`
+	//LastName         *string                                    `json:"lastName,omitempty"`
+	//Email            *string                                    `json:"email,omitempty"`
+	//Attributes       *map[string][]string                       `json:"attributes,omitempty"`
+	Social []*gocloak.FederatedIdentityRepresentation `json:"social,omitempty"`
+	Groups []*gocloak.UserGroup                       `json:"groups,omitempty"`
+	Roles  []*gocloak.Role                            `json:"roles,omitempty"`
 }
 
 func (a *App) getGroups(w http.ResponseWriter, r *http.Request) {
@@ -154,27 +155,27 @@ func (a *App) findUser(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	httputil.RespondWithJSON(w, http.StatusOK, user)
+}
+
+func (a *App) getUserInfo(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	user_id := vars["id"]
+
 	ctx := context.Background()
 	var groups []*gocloak.UserGroup
 	params := gocloak.GetGroupsParams{}
-	groups, _ = a.client.GetUserGroups(ctx, a.token.AccessToken, "main", *user.ID, params)
-	iden, _ := a.client.GetUserFederatedIdentities(ctx, a.token.AccessToken, "main", *user.ID)
+	groups, _ = a.client.GetUserGroups(ctx, a.token.AccessToken, "main", user_id, params)
+	iden, _ := a.client.GetUserFederatedIdentities(ctx, a.token.AccessToken, "main", user_id)
+	roles, _ := a.client.GetCompositeRealmRolesByUserID(ctx, a.token.AccessToken, "main", user_id)
 
-	uapi := &UserAPI{
-		user.ID,
-		user.CreatedTimestamp,
-		user.Username,
-		user.Enabled,
-		user.EmailVerified,
-		user.FirstName,
-		user.LastName,
-		user.Email,
-		user.Attributes,
+	user_info := &UserAPI{
 		iden,
 		groups,
+		roles,
 	}
 
-	httputil.RespondWithJSON(w, http.StatusOK, uapi)
+	httputil.RespondWithJSON(w, http.StatusOK, user_info)
 }
 
 func (a *App) searchUsers(w http.ResponseWriter, r *http.Request) {
@@ -199,13 +200,13 @@ func (a *App) searchUsers(w http.ResponseWriter, r *http.Request) {
 
 	params := gocloak.GetUsersParams{Max: &max, First: &first, Search: &search, BriefRepresentation: &br}
 	ctx := context.Background()
-	g, err := a.client.GetUsers(ctx, a.token.AccessToken, "main", params)
+	users, err := a.client.GetUsers(ctx, a.token.AccessToken, "main", params)
 	if err != nil {
 		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
 		return
 	}
 
-	httputil.RespondWithJSON(w, http.StatusOK, g)
+	httputil.RespondWithJSON(w, http.StatusOK, users)
 }
 
 func (a *App) getUserByID(id string) (*gocloak.User, error) {

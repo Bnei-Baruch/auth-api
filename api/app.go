@@ -107,7 +107,7 @@ func (a *App) initializeRoutes() {
 	a.Router.HandleFunc("/reg_check", a.regCheck).Methods("GET")
 	a.Router.HandleFunc("/my_info", a.getMyInfo).Methods("GET")
 	a.Router.HandleFunc("/find", a.findUser).Methods("GET")
-	//a.Router.HandleFunc("/search", a.searchUsers).Methods("GET")
+	a.Router.HandleFunc("/user/{id}", a.getUserInfo).Methods("GET")
 	a.Router.HandleFunc("/search", a.searchUsers).Methods("GET")
 	a.Router.HandleFunc("/users/{id}", a.getGroupUsers).Methods("GET")
 	a.Router.HandleFunc("/request", a.setRequest).Methods("GET")
