@@ -5,7 +5,7 @@ import (
 	"errors"
 	"github.com/Bnei-Baruch/auth-api/pkg/httputil"
 	"github.com/Bnei-Baruch/auth-api/pkg/middleware"
-	"github.com/Nerzal/gocloak/v7"
+	"github.com/Nerzal/gocloak/v9"
 	"github.com/gorilla/mux"
 	pkgerr "github.com/pkg/errors"
 	"net/http"
@@ -33,7 +33,7 @@ type UserAPI struct {
 	//Email            *string                                    `json:"email,omitempty"`
 	//Attributes       *map[string][]string                       `json:"attributes,omitempty"`
 	Social []*gocloak.FederatedIdentityRepresentation `json:"social,omitempty"`
-	Groups []*gocloak.UserGroup                       `json:"groups,omitempty"`
+	Groups []*gocloak.Group                           `json:"groups,omitempty"`
 	Roles  []*gocloak.Role                            `json:"roles,omitempty"`
 }
 
@@ -163,7 +163,7 @@ func (a *App) getUserInfo(w http.ResponseWriter, r *http.Request) {
 	user_id := vars["id"]
 
 	ctx := context.Background()
-	var groups []*gocloak.UserGroup
+	var groups []*gocloak.Group
 	params := gocloak.GetGroupsParams{}
 	groups, _ = a.client.GetUserGroups(ctx, a.token.AccessToken, "main", user_id, params)
 	iden, _ := a.client.GetUserFederatedIdentities(ctx, a.token.AccessToken, "main", user_id)
@@ -289,7 +289,7 @@ func (a *App) regCheck(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get User Groups
-	var groups []*gocloak.UserGroup
+	var groups []*gocloak.Group
 	params := gocloak.GetGroupsParams{}
 	ctx := context.Background()
 	groups, err = a.client.GetUserGroups(ctx, a.token.AccessToken, "main", *user.ID, params)
@@ -339,7 +339,7 @@ func (a *App) getRequestedUser(email string) (*gocloak.User, error) {
 	}
 
 	// Get User Groups
-	var groups []*gocloak.UserGroup
+	var groups []*gocloak.Group
 	params := gocloak.GetGroupsParams{}
 	ctx := context.Background()
 	groups, err = a.client.GetUserGroups(ctx, a.token.AccessToken, "main", *user.ID, params)
@@ -435,7 +435,7 @@ func (a *App) setPendingByMail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get User Groups
-	var groups []*gocloak.UserGroup
+	var groups []*gocloak.Group
 	params := gocloak.GetGroupsParams{}
 	ctx := context.Background()
 	groups, err = a.client.GetUserGroups(ctx, a.token.AccessToken, "main", *cu.ID, params)
@@ -485,7 +485,7 @@ func (a *App) setPending(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get User Groups
-	var groups []*gocloak.UserGroup
+	var groups []*gocloak.Group
 	params := gocloak.GetGroupsParams{}
 	ctx := context.Background()
 	groups, err = a.client.GetUserGroups(ctx, a.token.AccessToken, "main", *cu.ID, params)
@@ -557,7 +557,7 @@ func (a *App) verifyUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get Pending User Groups
-	var groups []*gocloak.UserGroup
+	var groups []*gocloak.Group
 	params := gocloak.GetGroupsParams{}
 	ctx := context.Background()
 	groups, err = a.client.GetUserGroups(ctx, a.token.AccessToken, "main", *pu.ID, params)
@@ -748,7 +748,7 @@ func (a *App) changeStatus(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Get User Groups
-		var groups []*gocloak.UserGroup
+		var groups []*gocloak.Group
 		params := gocloak.GetGroupsParams{}
 		groups, err = a.client.GetUserGroups(ctx, a.token.AccessToken, "main", *pu.ID, params)
 		if err != nil {

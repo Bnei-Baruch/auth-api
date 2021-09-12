@@ -3,7 +3,7 @@ module github.com/Bnei-Baruch/auth-api
 go 1.15
 
 require (
-	github.com/Nerzal/gocloak/v7 v7.11.0
+	github.com/Nerzal/gocloak/v9 v9.0.1 // indirect
 	github.com/coreos/go-oidc v2.2.1+incompatible
 	github.com/eclipse/paho.mqtt.golang v1.3.2
 	github.com/gorilla/mux v1.8.0
