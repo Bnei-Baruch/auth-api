@@ -1,10 +1,23 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/eclipse/paho.mqtt.golang"
 	"strings"
 )
+
+type Message struct {
+	User User   `json:"user,omitempty"`
+	Type string `json:"type,omitempty"`
+	Text string `json:"text,omitempty"`
+}
+
+type User struct {
+	ID      string `json:"id,omitempty"`
+	Role    string `json:"role,omitempty"`
+	Display string `json:"display,omitempty"`
+}
 
 func (a *App) SubMQTT(c mqtt.Client) {
 	fmt.Println("- Connected to MQTT -")
@@ -20,7 +33,6 @@ func (a *App) LostMQTT(c mqtt.Client, e error) {
 }
 
 func (a *App) MsgHandler(c mqtt.Client, m mqtt.Message) {
-	//fmt.Printf("Received message: %s from topic: %s\n", m.Payload(), m.Topic())
 	id := "false"
 	s := strings.Split(m.Topic(), "/")
 	//p := string(m.Payload())
@@ -31,35 +43,7 @@ func (a *App) MsgHandler(c mqtt.Client, m mqtt.Message) {
 		id = s[3]
 	}
 
-	if id == "false" {
-		//switch p {
-		//case "start":
-		//	go a.startExecMqtt(ep)
-		//case "stop":
-		//	go a.stopExecMqtt(ep)
-		//case "status":
-		//	go a.execStatusMqtt(ep)
-		//}
-	}
-
-	if id != "false" {
-		//switch p {
-		//case "start":
-		//	go a.startExecMqttByID(ep, id)
-		//case "stop":
-		//	go a.stopExecMqttByID(ep, id)
-		//case "status":
-		//	go a.execStatusMqttByID(ep, id)
-		//case "cmdstat":
-		//	go a.cmdStatMqtt(ep, id)
-		//case "progress":
-		//	go a.getProgressMqtt(ep, id)
-		//case "report":
-		//	go a.getReportMqtt(ep, id)
-		//case "alive":
-		//	go a.isAliveMqtt(ep, id)
-		//}
-	}
+	fmt.Printf("Received message: %s from topic: %s %s\n", m.Payload(), m.Topic(), id)
 }
 
 func (a *App) Publish(topic string, message string) {
@@ -67,5 +51,28 @@ func (a *App) Publish(topic string, message string) {
 	//a.Msg.Publish(topic, byte(1), false, text)
 	if token := a.Msg.Publish(topic, byte(1), false, text); token.Wait() && token.Error() != nil {
 		fmt.Printf("Publish message error: %s\n", token.Error())
+	}
+}
+
+func (a *App) SendMessage(id string) {
+	topic := "galaxy/users/" + id
+	m := &Message{
+		Text: "You approved to Arvut System! Please ReLogin to System with updated permission.",
+		Type: "client-chat",
+		User: User{
+			ID:      id,
+			Role:    "service",
+			Display: "Auth System",
+		},
+	}
+
+	message, err := json.Marshal(m)
+	if err != nil {
+		fmt.Printf("Message parsing: %s\n", err)
+	}
+
+	text := fmt.Sprintf(string(message))
+	if token := a.Msg.Publish(topic, byte(1), true, text); token.Wait() && token.Error() != nil {
+		fmt.Printf("Send message error: %s\n", token.Error())
 	}
 }

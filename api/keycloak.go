@@ -785,6 +785,11 @@ func (a *App) changeStatus(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
+			// Send user notification
+			if groupId == GalaxyUsers {
+				go a.SendMessage(userId)
+			}
+
 			// Disable banned user
 			if groupId == BannedUsers {
 				*pu.Enabled = false
