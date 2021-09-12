@@ -55,7 +55,7 @@ func (a *App) Publish(topic string, message string) {
 }
 
 func (a *App) SendMessage(id string) {
-	topic := "galaxy/users/" + id
+	topic := "auth/users/" + id
 	m := &Message{
 		Text: "You approved to Arvut System! Please ReLogin to System with updated permission.",
 		Type: "client-chat",
