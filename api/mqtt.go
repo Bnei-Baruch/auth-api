@@ -55,7 +55,7 @@ func (a *App) Publish(topic string, message string) {
 }
 
 func (a *App) SendMessage(id string) {
-	topic := "auth/users/" + id
+	topic := "galaxy/users/" + id
 	m := &Message{
 		Text: "You approved to Arvut System! Please ReLogin to System with updated permission.",
 		Type: "client-chat",
@@ -72,7 +72,7 @@ func (a *App) SendMessage(id string) {
 	}
 
 	text := fmt.Sprintf(string(message))
-	if token := a.Msg.Publish(topic, byte(1), true, text); token.Wait() && token.Error() != nil {
+	if token := a.Msg.Publish(topic, byte(1), false, text); token.Wait() && token.Error() != nil {
 		fmt.Printf("Send message error: %s\n", token.Error())
 	}
 }
