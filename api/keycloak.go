@@ -20,6 +20,7 @@ const (
 	GalaxyUsers   = "04778f5d-31c1-4a2d-a395-7eac07ebc5b7"
 	BannedUsers   = "c4569eaa-c67d-446e-b370-ad426a006c6b"
 	KenesOlami    = "38275a65-46e4-4294-817b-031e4c07bf2e"
+	KmediaUser    = "39211f7f-18e8-4dfa-85c8-82ccbdc9260a"
 )
 
 type UserAPI struct {
@@ -729,6 +730,28 @@ func (a *App) approveUserByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httputil.RespondSuccess(w)
+}
+
+func (a *App) kmediaGroup(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	// Get User by ID
+	userId := r.FormValue("user_id")
+	pu, err := a.client.GetUserByID(ctx, a.token.AccessToken, "main", userId)
+	if err != nil {
+		httputil.RespondWithJSON(w, http.StatusNotFound, err)
+		return
+	}
+
+	// Add to kmedia group
+	err = a.client.AddUserToGroup(ctx, a.token.AccessToken, "main", *pu.ID, KmediaUser)
+	if err != nil {
+		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+		return
+	}
+
+	httputil.RespondSuccess(w)
+	return
 }
 
 func (a *App) changeStatus(w http.ResponseWriter, r *http.Request) {

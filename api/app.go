@@ -114,6 +114,7 @@ func (a *App) initializeRoutes() {
 	a.Router.HandleFunc("/verify", a.verifyUser).Methods("GET")
 	a.Router.HandleFunc("/pending", a.setPending).Methods("POST")
 	a.Router.HandleFunc("/status", a.changeStatus).Methods("POST")
+	a.Router.HandleFunc("/kmedia", a.kmediaGroup).Methods("POST")
 	a.Router.HandleFunc("/approve/{id}", a.approveUserByID).Methods("GET")
 	a.Router.HandleFunc("/remove/{id}", a.removeUser).Methods("GET")
 	a.Router.HandleFunc("/cleanup", a.cleanUsers).Methods("GET")
