@@ -118,6 +118,7 @@ func (a *App) initializeRoutes() {
 	a.Router.HandleFunc("/approve/{id}", a.approveUserByID).Methods("GET")
 	a.Router.HandleFunc("/remove/{id}", a.removeUser).Methods("GET")
 	a.Router.HandleFunc("/cleanup", a.cleanUsers).Methods("GET")
+	a.Router.HandleFunc("/self_remove", a.selfRemove).Methods("DELETE")
 }
 
 func (a *App) initMQTT() {

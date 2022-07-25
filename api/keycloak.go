@@ -862,6 +862,25 @@ func (a *App) removeUser(w http.ResponseWriter, r *http.Request) {
 	httputil.RespondSuccess(w)
 }
 
+func (a *App) selfRemove(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	// Get Current User
+	cu, err := a.getCurrentUser(r)
+	if err != nil {
+		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+		return
+	}
+
+	err = a.client.DeleteUser(ctx, a.token.AccessToken, "main", *cu.ID)
+	if err != nil {
+		httputil.NewInternalError(pkgerr.WithStack(err)).Abort(w, r)
+		return
+	}
+
+	httputil.RespondSuccess(w)
+}
+
 func (a *App) cleanUsers(w http.ResponseWriter, r *http.Request) {
 	// Check role
 	authRoot := checkRole("auth_root", r)
