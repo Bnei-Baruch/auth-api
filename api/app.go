@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/Nerzal/gocloak/v9"
+	"github.com/Nerzal/gocloak/v11"
 	"github.com/coreos/go-oidc"
 	"github.com/gorilla/mux"
 	"github.com/rs/cors"

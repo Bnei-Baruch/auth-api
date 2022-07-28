@@ -5,7 +5,7 @@ import (
 	"errors"
 	"github.com/Bnei-Baruch/auth-api/pkg/httputil"
 	"github.com/Bnei-Baruch/auth-api/pkg/middleware"
-	"github.com/Nerzal/gocloak/v9"
+	"github.com/Nerzal/gocloak/v11"
 	"github.com/gorilla/mux"
 	pkgerr "github.com/pkg/errors"
 	"net/http"
