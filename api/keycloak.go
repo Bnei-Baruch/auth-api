@@ -36,6 +36,7 @@ type UserAPI struct {
 	Social []*gocloak.FederatedIdentityRepresentation `json:"social,omitempty"`
 	Groups []*gocloak.Group                           `json:"groups,omitempty"`
 	Roles  []*gocloak.Role                            `json:"roles,omitempty"`
+	Cred   []*gocloak.CredentialRepresentation        `json:"credentials,omitempty"`
 }
 
 func (a *App) getGroups(w http.ResponseWriter, r *http.Request) {
@@ -169,11 +170,13 @@ func (a *App) getUserInfo(w http.ResponseWriter, r *http.Request) {
 	groups, _ = a.client.GetUserGroups(ctx, a.token.AccessToken, "main", user_id, params)
 	iden, _ := a.client.GetUserFederatedIdentities(ctx, a.token.AccessToken, "main", user_id)
 	roles, _ := a.client.GetCompositeRealmRolesByUserID(ctx, a.token.AccessToken, "main", user_id)
+	cred, _ := a.client.GetCredentials(ctx, a.token.AccessToken, "main", user_id)
 
 	user_info := &UserAPI{
 		iden,
 		groups,
 		roles,
+		cred,
 	}
 
 	httputil.RespondWithJSON(w, http.StatusOK, user_info)
